@@ -908,6 +908,7 @@ app.include_router(api)
 # =========================================================================== #
 
 PROFILS = ["Membre", "Inconnu", "Prospect Évangélisé", "Prospect Famille", "Externe"]
+CATEGORIES_AGE = ["Enfant (-13)", "Gédéon (-18)", "J-30 (18-30)", "CCMG (+30)"]
 
 
 class ParticipantIn(BaseModel):
@@ -915,6 +916,7 @@ class ParticipantIn(BaseModel):
     nom: str
     prenom: str
     profil: str
+    categorie_age: Optional[str] = None
     tel: Optional[str] = None
     email: Optional[str] = None
     eglise: Optional[str] = None
@@ -927,6 +929,7 @@ class ParticipantUpdate(BaseModel):
     nom: Optional[str] = None
     prenom: Optional[str] = None
     profil: Optional[str] = None
+    categorie_age: Optional[str] = None
     tel: Optional[str] = None
     email: Optional[str] = None
     eglise: Optional[str] = None
@@ -944,6 +947,7 @@ class Participant(BaseModel):
     nom: str
     prenom: str
     profil: str
+    categorie_age: Optional[str] = None
     tel: Optional[str] = None
     email: Optional[str] = None
     eglise: Optional[str] = None
@@ -983,6 +987,7 @@ def _participant_from_doc(d: dict) -> Participant:
     return Participant(
         id=d["_id"], evenement_id=d["evenement_id"], badge_id=d["badge_id"],
         nom=d["nom"], prenom=d["prenom"], profil=d.get("profil", "Externe"),
+        categorie_age=d.get("categorie_age"),
         tel=d.get("tel"), email=d.get("email"), eglise=d.get("eglise"),
         jours_presence=d.get("jours_presence", []),
         referent=d.get("referent"), notes=d.get("notes"),
@@ -1029,6 +1034,7 @@ async def create_participant(data: ParticipantIn, user=Depends(current_user)):
         "nom": data.nom.strip().upper(),
         "prenom": data.prenom.strip(),
         "profil": data.profil,
+        "categorie_age": data.categorie_age,
         "tel": data.tel,
         "email": (data.email or "").strip().lower() or None,
         "eglise": data.eglise,
@@ -1048,6 +1054,7 @@ class PublicParticipantIn(BaseModel):
     nom: str
     prenom: str
     profil: str
+    categorie_age: Optional[str] = None
     tel: Optional[str] = None
     email: Optional[str] = None
     eglise: Optional[str] = None
@@ -1071,6 +1078,7 @@ async def public_inscription(data: PublicParticipantIn):
         "nom": data.nom.strip().upper(),
         "prenom": data.prenom.strip(),
         "profil": data.profil,
+        "categorie_age": data.categorie_age,
         "tel": data.tel,
         "email": (data.email or "").strip().lower() or None,
         "eglise": data.eglise,
@@ -1290,25 +1298,61 @@ async def dashboard(evenement_id: str, _=Depends(current_user)):
     db = app.state.db
     parts = await db.event_participants.find({"evenement_id": evenement_id}).to_list(10000)
     active = await db.event_sessions.find_one({"evenement_id": evenement_id, "active": True})
-    pointages_count = 0
-    enfants_total = 0
-    if active:
-        pointages_count = await db.event_pointages.count_documents({"session_id": active["_id"]})
-        async for e in db.event_enfants.find({"session_id": active["_id"]}):
-            enfants_total += e.get("delta", 0)
+
+    # Aggregations over all participants
     by_profil = {p: 0 for p in PROFILS}
+    by_age = {c: 0 for c in CATEGORIES_AGE}
     by_eglise: dict = {}
     for p in parts:
         by_profil[p.get("profil", "Externe")] = by_profil.get(p.get("profil", "Externe"), 0) + 1
+        c = p.get("categorie_age")
+        if c: by_age[c] = by_age.get(c, 0) + 1
         e = p.get("eglise") or "—"
         by_eglise[e] = by_eglise.get(e, 0) + 1
+
+    # Presence stats — participants scanned in the active session
+    presence: dict = {
+        "total": 0,
+        "membres": 0, "vip": 0, "prospects": 0, "externes": 0, "inconnus": 0,
+        "gedeon": 0, "j30": 0, "ccmg": 0, "enfants_pointes": 0,
+        "by_eglise": {},
+    }
+    enfants_total = 0
+    if active:
+        pointages = await db.event_pointages.find({"session_id": active["_id"]}).to_list(10000)
+        presence["total"] = len(pointages)
+        # Get all participant ids scanned
+        pids = {pt["participant_id"] for pt in pointages}
+        for p in parts:
+            if p["_id"] not in pids:
+                continue
+            prof = p.get("profil", "Externe")
+            if prof == "Membre": presence["membres"] += 1
+            elif prof == "Inconnu": presence["inconnus"] += 1
+            elif prof.startswith("Prospect"): presence["prospects"] += 1
+            elif prof == "Externe": presence["externes"] += 1
+            # VIP heuristic: referent contains "VIP" or profil==Externe with a referent set
+            if p.get("notes") and "VIP" in (p.get("notes") or "").upper():
+                presence["vip"] += 1
+            cage = p.get("categorie_age") or ""
+            if cage.startswith("Gédéon"): presence["gedeon"] += 1
+            elif cage.startswith("J-30"): presence["j30"] += 1
+            elif cage.startswith("CCMG"): presence["ccmg"] += 1
+            elif cage.startswith("Enfant"): presence["enfants_pointes"] += 1
+            e = p.get("eglise") or "—"
+            presence["by_eglise"][e] = presence["by_eglise"].get(e, 0) + 1
+        async for e in db.event_enfants.find({"session_id": active["_id"]}):
+            enfants_total += e.get("delta", 0)
+
     return {
         "total": len(parts),
         "by_profil": by_profil,
+        "by_age": by_age,
         "by_eglise": by_eglise,
         "active_session": _session_from_doc(active).model_dump() if active else None,
-        "pointages_active_session": pointages_count,
+        "pointages_active_session": presence["total"],
         "enfants_active_session": enfants_total,
+        "presence": presence,
     }
 
 

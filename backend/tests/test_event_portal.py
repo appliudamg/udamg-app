@@ -255,6 +255,200 @@ class TestExports:
         assert r.content[:4] == b"%PDF"
 
 
+# =========================================================================== #
+# ============ NEW ITERATION-5 TESTS: categorie_age + presence =============== #
+# =========================================================================== #
+
+@pytest.fixture(scope="module")
+def event_id_v5(pasteur_token):
+    """Fresh event dedicated to iteration-5 categorie_age + presence tests."""
+    from datetime import datetime, timezone, timedelta
+    r = requests.post(
+        f"{BASE_URL}/api/evenements",
+        json={
+            "titre": "TEST_Event_V5_Age",
+            "date": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            "lieu": "X", "type_evenement": "convention",
+        },
+        headers={"Authorization": f"Bearer {pasteur_token}"}, timeout=15,
+    )
+    assert r.status_code == 201
+    return r.json()["id"]
+
+
+class TestCategorieAge:
+    def test_create_participant_with_categorie_age(self, pasteur_token, event_id_v5):
+        h = {"Authorization": f"Bearer {pasteur_token}"}
+        r = requests.post(
+            f"{BASE_URL}/api/event/participants",
+            json={"evenement_id": event_id_v5, "nom": "TEST_Ged", "prenom": "One",
+                  "profil": "Membre", "categorie_age": "Gédéon (-18)"},
+            headers=h, timeout=15,
+        )
+        assert r.status_code == 201, r.text
+        d = r.json()
+        assert d["categorie_age"] == "Gédéon (-18)"
+        # GET verifies persistence
+        r2 = requests.get(f"{BASE_URL}/api/event/participants/{d['id']}",
+                          headers=h, timeout=15)
+        assert r2.status_code == 200
+        assert r2.json()["categorie_age"] == "Gédéon (-18)"
+
+    def test_patch_participant_categorie_age(self, pasteur_token, event_id_v5):
+        h = {"Authorization": f"Bearer {pasteur_token}"}
+        r = requests.post(
+            f"{BASE_URL}/api/event/participants",
+            json={"evenement_id": event_id_v5, "nom": "TEST_Patch", "prenom": "One",
+                  "profil": "Membre"},
+            headers=h, timeout=15,
+        )
+        pid = r.json()["id"]
+        r2 = requests.patch(
+            f"{BASE_URL}/api/event/participants/{pid}",
+            json={"categorie_age": "CCMG (+30)"},
+            headers=h, timeout=15,
+        )
+        assert r2.status_code == 200
+        assert r2.json()["categorie_age"] == "CCMG (+30)"
+        # verify persistence via GET
+        r3 = requests.get(f"{BASE_URL}/api/event/participants/{pid}",
+                          headers=h, timeout=15)
+        assert r3.json()["categorie_age"] == "CCMG (+30)"
+
+    def test_public_inscription_with_categorie_age(self, event_id_v5):
+        r = requests.post(
+            f"{BASE_URL}/api/event/participants/public",
+            json={"evenement_id": event_id_v5, "nom": "TEST_PubAge", "prenom": "Two",
+                  "profil": "Prospect Évangélisé", "categorie_age": "J-30 (18-30)"},
+            timeout=15,
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["categorie_age"] == "J-30 (18-30)"
+
+
+class TestPresenceDashboard:
+    """Verify new dashboard 'presence' object and by_age aggregation."""
+
+    def test_dashboard_shape_no_active_session(self, pasteur_token):
+        """Fresh event with participants but NO active session → presence.* == 0."""
+        from datetime import datetime, timezone, timedelta
+        h = {"Authorization": f"Bearer {pasteur_token}"}
+        r = requests.post(
+            f"{BASE_URL}/api/evenements",
+            json={"titre": "TEST_V5_NoSess",
+                  "date": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                  "lieu": "X", "type_evenement": "convention"},
+            headers=h, timeout=15,
+        )
+        eid = r.json()["id"]
+        # Add participant with categorie_age but NO session
+        requests.post(f"{BASE_URL}/api/event/participants",
+                      json={"evenement_id": eid, "nom": "TEST_Ged", "prenom": "X",
+                            "profil": "Membre", "categorie_age": "Gédéon (-18)"},
+                      headers=h, timeout=15)
+        rd = requests.get(f"{BASE_URL}/api/event/dashboard",
+                          params={"evenement_id": eid}, headers=h, timeout=15)
+        assert rd.status_code == 200
+        d = rd.json()
+        assert "presence" in d
+        assert "by_age" in d
+        # No active session → all presence counters == 0
+        p = d["presence"]
+        for k in ("total", "membres", "vip", "prospects", "externes", "inconnus",
+                  "gedeon", "j30", "ccmg", "enfants_pointes"):
+            assert k in p, f"missing {k}"
+            assert p[k] == 0, f"presence.{k} should be 0 with no active session, got {p[k]}"
+        assert isinstance(p["by_eglise"], dict)
+        # by_age should still count the Gédéon participant (aggregation over all parts)
+        assert d["by_age"]["Gédéon (-18)"] >= 1
+
+    def test_presence_reflects_active_session_only(self, pasteur_token):
+        """
+        Setup:
+          - Event with 3 participants: 1 Gédéon Membre, 1 J-30 Prospect w/ VIP notes, 1 CCMG Externe
+          - Start session
+          - Scan ONLY Gédéon + VIP (not the CCMG)
+          - Add 2 enfants (physical count)
+        Expected presence:
+          total=2, membres=1, prospects=1, externes=0, vip=1, gedeon=1, j30=1, ccmg=0
+          enfants_pointes=0 (no participant flagged as Enfant scanned)
+          enfants_active_session=2
+        """
+        from datetime import datetime, timezone, timedelta
+        h = {"Authorization": f"Bearer {pasteur_token}"}
+        r = requests.post(
+            f"{BASE_URL}/api/evenements",
+            json={"titre": "TEST_V5_Presence",
+                  "date": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                  "lieu": "X", "type_evenement": "convention"},
+            headers=h, timeout=15,
+        )
+        eid = r.json()["id"]
+
+        p1 = requests.post(f"{BASE_URL}/api/event/participants",
+                           json={"evenement_id": eid, "nom": "TEST_Ged1", "prenom": "A",
+                                 "profil": "Membre", "categorie_age": "Gédéon (-18)",
+                                 "eglise": "UDAMG Angers"},
+                           headers=h, timeout=15).json()
+        p2 = requests.post(f"{BASE_URL}/api/event/participants",
+                           json={"evenement_id": eid, "nom": "TEST_Vip", "prenom": "B",
+                                 "profil": "Prospect Évangélisé",
+                                 "categorie_age": "J-30 (18-30)",
+                                 "notes": "Invité VIP conférencier",
+                                 "eglise": "UDAMG Paris"},
+                           headers=h, timeout=15).json()
+        # CCMG not scanned - should NOT be counted in presence
+        _p3 = requests.post(f"{BASE_URL}/api/event/participants",
+                            json={"evenement_id": eid, "nom": "TEST_CCMG_notscan",
+                                  "prenom": "C", "profil": "Externe",
+                                  "categorie_age": "CCMG (+30)"},
+                            headers=h, timeout=15).json()
+
+        # Start session
+        rs = requests.post(f"{BASE_URL}/api/event/sessions/start",
+                           json={"evenement_id": eid, "nom": "TEST_V5_Sess"},
+                           headers=h, timeout=15)
+        assert rs.status_code == 201
+
+        # Scan only p1 + p2
+        for bid in (p1["badge_id"], p2["badge_id"]):
+            rp = requests.post(f"{BASE_URL}/api/event/pointages",
+                               json={"evenement_id": eid, "badge_id": bid},
+                               headers=h, timeout=15)
+            assert rp.status_code == 201, rp.text
+            assert rp.json()["status"] == "ok"
+
+        # Enfants +2
+        requests.post(f"{BASE_URL}/api/event/enfants",
+                      json={"evenement_id": eid, "delta": 2},
+                      headers=h, timeout=15)
+
+        rd = requests.get(f"{BASE_URL}/api/event/dashboard",
+                          params={"evenement_id": eid}, headers=h, timeout=15)
+        assert rd.status_code == 200
+        d = rd.json()
+        p = d["presence"]
+        assert p["total"] == 2, p
+        assert p["membres"] == 1
+        assert p["prospects"] == 1
+        assert p["externes"] == 0, "CCMG participant not scanned should NOT be counted"
+        assert p["inconnus"] == 0
+        assert p["vip"] == 1, "VIP in notes should be counted"
+        assert p["gedeon"] == 1
+        assert p["j30"] == 1
+        assert p["ccmg"] == 0, "CCMG participant not scanned"
+        assert p["enfants_pointes"] == 0
+        # by_eglise only for scanned participants
+        assert p["by_eglise"].get("UDAMG Angers") == 1
+        assert p["by_eglise"].get("UDAMG Paris") == 1
+        # enfants_active_session (physical count) is separate
+        assert d["enfants_active_session"] == 2
+        # by_age across ALL participants (including unscanned CCMG)
+        assert d["by_age"]["Gédéon (-18)"] >= 1
+        assert d["by_age"]["J-30 (18-30)"] >= 1
+        assert d["by_age"]["CCMG (+30)"] >= 1
+
+
 class TestPurge:
     def test_purge_missing_confirmation(self, pasteur_token, event_id):
         r = requests.post(f"{BASE_URL}/api/event/participants/purge",

@@ -54,6 +54,7 @@ export default function Badge() {
               <Text style={styles.profilTagTxt}>{data.profil}</Text>
             </View>
             <Text style={styles.badgeId} testID="badge-id">{data.badge_id}</Text>
+            {!!data.categorie_age && <Text style={styles.eglise}>{data.categorie_age}</Text>}
             {!!data.eglise && <Text style={styles.eglise}>{data.eglise}</Text>}
           </View>
 

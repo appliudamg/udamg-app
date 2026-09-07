@@ -10,7 +10,7 @@ import BottomSheet, { BottomSheetBackdrop, BottomSheetView, BottomSheetScrollVie
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api, Ville } from "@/src/api";
-import { EVENT_PROFILS, EventParticipant, profilColor } from "@/src/event-api";
+import { CATEGORIES_AGE, EVENT_PROFILS, EventParticipant, profilColor } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -67,6 +67,7 @@ export default function Inscrits() {
           method: "PATCH",
           body: JSON.stringify({
             nom: p.nom, prenom: p.prenom, profil: p.profil,
+            categorie_age: p.categorie_age,
             tel: p.tel, email: p.email, eglise: p.eglise,
             jours_presence: p.jours_presence, notes: p.notes,
           }),
@@ -76,6 +77,7 @@ export default function Inscrits() {
         method: "POST",
         body: JSON.stringify({
           evenement_id: id, nom: p.nom, prenom: p.prenom, profil: p.profil,
+          categorie_age: p.categorie_age,
           tel: p.tel, email: p.email, eglise: p.eglise,
           jours_presence: p.jours_presence,
         }),
@@ -202,6 +204,7 @@ export default function Inscrits() {
                 </View>
               </View>
               {!!item.eglise && <Text style={styles.meta}>⛪ {item.eglise}</Text>}
+              {!!item.categorie_age && <Text style={styles.meta}>👥 {item.categorie_age}</Text>}
               {!!item.tel && <Text style={styles.meta}>📞 {item.tel}</Text>}
               <View style={styles.dots}>
                 <View style={[styles.dot, item.sms_status === "sent" ? styles.dotSent : item.sms_status === "pending" ? styles.dotPending : styles.dotNone]} />
@@ -252,6 +255,15 @@ export default function Inscrits() {
                   <Pressable key={p} testID={`form-profil-${p}`} onPress={() => setEditing(e => e ? { ...e, profil: p } : e)}
                              style={[styles.chip, editing?.profil === p && { backgroundColor: profilColor(p), borderColor: profilColor(p) }]}>
                     <Text style={[styles.chipTxt, editing?.profil === p && { color: "#FFFFFF" }]}>{p}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.label}>Catégorie (Âge)</Text>
+              <View style={styles.chipRow}>
+                {CATEGORIES_AGE.map(c => (
+                  <Pressable key={c} testID={`form-age-${c}`} onPress={() => setEditing(e => e ? { ...e, categorie_age: c } : e)}
+                             style={[styles.chip, editing?.categorie_age === c && styles.chipOn]}>
+                    <Text style={[styles.chipTxt, editing?.categorie_age === c && styles.chipTxtOn]}>{c}</Text>
                   </Pressable>
                 ))}
               </View>

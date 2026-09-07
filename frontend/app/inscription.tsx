@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast, ToastProvider } from "@/src/toast";
 import { api } from "@/src/api";
-import { EVENT_PROFILS, EventParticipant, EventProfil, profilColor } from "@/src/event-api";
+import { EVENT_PROFILS, CATEGORIES_AGE, EventParticipant, EventProfil, CategorieAge, profilColor } from "@/src/event-api";
 import { colors, spacing, radius } from "@/src/theme";
 
 function Inner() {
@@ -17,6 +17,7 @@ function Inner() {
   const toast = useToast();
   const { event, titre } = useLocalSearchParams<{ event: string; titre?: string }>();
   const [profil, setProfil] = useState<EventProfil | null>(null);
+  const [age, setAge] = useState<CategorieAge | null>(null);
   const [f, setF] = useState({ nom: "", prenom: "", tel: "", email: "", eglise: "", referent: "" });
   const [guideOpen, setGuideOpen] = useState(false);
   const [done, setDone] = useState<EventParticipant | null>(null);
@@ -29,6 +30,7 @@ function Inner() {
           evenement_id: event,
           nom: f.nom, prenom: f.prenom,
           profil: profil || "Externe",
+          categorie_age: age,
           tel: f.tel || null, email: f.email || null,
           eglise: f.eglise || null, referent: f.referent || null,
           jours_presence: [],
@@ -106,6 +108,20 @@ function Inner() {
             <TextInput testID="insc-email" placeholder="Email" placeholderTextColor={colors.muted}
                        autoCapitalize="none" keyboardType="email-address"
                        value={f.email} onChangeText={t => setF({ ...f, email: t })} style={styles.input} />
+
+            <Text style={[styles.label, { marginTop: spacing.md }]}>Catégorie d'âge</Text>
+            <View style={styles.profilGrid}>
+              {CATEGORIES_AGE.map(c => (
+                <Pressable
+                  key={c}
+                  testID={`insc-age-${c}`}
+                  onPress={() => setAge(c)}
+                  style={[styles.profilCard, age === c && { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }]}
+                >
+                  <Text style={[styles.profilName, age === c && { color: "#FFFFFF" }]}>{c}</Text>
+                </Pressable>
+              ))}
+            </View>
 
             {(profil === "Membre" || profil === "Prospect Évangélisé") && (
               <TextInput testID="insc-eglise" placeholder="Église (ex: CCMG Paris)" placeholderTextColor={colors.muted}

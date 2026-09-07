@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
-import { EventDashboard, EventSession, PointageRecord, profilColor } from "@/src/event-api";
+import { EventDashboard, EventSession, PointageRecord } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -109,17 +109,41 @@ export default function Pasteur() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xl, gap: spacing.lg }}>
-        <View style={styles.kpiRow}>
-          <Kpi label="Total" value={dash?.total ?? 0} color={colors.brandPrimary} />
-          <Kpi label="Pointés" value={dash?.pointages_active_session ?? 0} color={colors.success} />
-          <Kpi label="Enfants" value={dash?.enfants_active_session ?? 0} color="#F59E0B" />
+        {/* Total Présents banner */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroLbl}>TOTAL PRÉSENTS</Text>
+          <Text style={styles.heroNum}>{dash?.presence?.total ?? 0}</Text>
+          <Text style={styles.heroSub}>
+            {dash?.total ? Math.round(((dash?.presence?.total ?? 0) / dash.total) * 100) : 0}% de présence · {dash?.total ?? 0} inscrits
+          </Text>
         </View>
 
-        <View style={styles.kpiRow}>
-          <Kpi label="Membres" value={dash?.by_profil?.["Membre"] ?? 0} color={profilColor("Membre")} />
-          <Kpi label="Inconnus" value={dash?.by_profil?.["Inconnu"] ?? 0} color={profilColor("Inconnu")} />
-          <Kpi label="Prospects" value={(dash?.by_profil?.["Prospect Évangélisé"] ?? 0) + (dash?.by_profil?.["Prospect Famille"] ?? 0)} color={profilColor("Prospect Évangélisé")} />
+        {/* 8 KPI grid */}
+        <View style={styles.grid}>
+          <KpiBox label="Membres UDAMG" num={dash?.presence?.membres ?? 0} total={dash?.by_profil?.["Membre"] ?? 0} color="#10B981" testID="kpi-membres" />
+          <KpiBox label="Invités VIP" num={dash?.presence?.vip ?? 0} total={dash?.presence?.total ?? 0} color="#8B5CF6" testID="kpi-vip" />
+          <KpiBox label="Prospects" num={dash?.presence?.prospects ?? 0} total={(dash?.by_profil?.["Prospect Évangélisé"] ?? 0) + (dash?.by_profil?.["Prospect Famille"] ?? 0)} color="#F59E0B" testID="kpi-prospects" />
+          <KpiBox label="Enfants" num={dash?.enfants_active_session ?? 0} color="#EC4899" testID="kpi-enfants" />
+          <KpiBox label="Gédéon (-18)" num={dash?.presence?.gedeon ?? 0} total={dash?.by_age?.["Gédéon (-18)"] ?? 0} color="#3B82F6" testID="kpi-gedeon" />
+          <KpiBox label="J-30 (18-30)" num={dash?.presence?.j30 ?? 0} total={dash?.by_age?.["J-30 (18-30)"] ?? 0} color="#06B6D4" testID="kpi-j30" />
+          <KpiBox label="CCMG (+30)" num={dash?.presence?.ccmg ?? 0} total={dash?.by_age?.["CCMG (+30)"] ?? 0} color="#F59E0B" testID="kpi-ccmg" />
+          <KpiBox label="Inconnus" num={dash?.presence?.inconnus ?? 0} total={dash?.by_profil?.["Inconnu"] ?? 0} color="#EF4444" testID="kpi-inconnus" />
         </View>
+
+        {/* Répartition par église */}
+        {dash?.presence?.by_eglise && Object.keys(dash.presence.by_eglise).length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🏛 Répartition par église (présents)</Text>
+            <View style={styles.chipRow}>
+              {Object.entries(dash.presence.by_eglise).map(([e, n]) => (
+                <View key={e} style={styles.egliseChip}>
+                  <Text style={styles.egliseTxt}>{e}</Text>
+                  <View style={styles.egliseCount}><Text style={styles.egliseCountTxt}>{n}</Text></View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contrôle des séances</Text>
@@ -156,7 +180,7 @@ export default function Pasteur() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Arrivées récentes</Text>
+          <Text style={styles.sectionTitle}>🔔 Arrivées récentes (LIVE)</Text>
           {(recent ?? []).length === 0 ? (
             <Text style={styles.empty}>Aucune arrivée pour l'instant</Text>
           ) : (
@@ -166,7 +190,7 @@ export default function Pasteur() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.arrivalName}>{r.participant?.prenom} {r.participant?.nom}</Text>
                   <Text style={styles.arrivalMeta}>
-                    {r.participant?.badge_id} · {r.participant?.profil}
+                    {r.participant?.badge_id} · {r.participant?.profil}{r.participant?.eglise ? ` · ${r.participant.eglise}` : ""}
                   </Text>
                 </View>
                 <Text style={styles.arrivalTime}>{new Date(r.timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</Text>
@@ -225,19 +249,29 @@ export default function Pasteur() {
   );
 }
 
-function Kpi({ label, value, color }: { label: string; value: number; color: string }) {
+function KpiBox({ label, num, total, color, testID }: { label: string; num: number; total?: number; color: string; testID: string }) {
+  const pct = total && total > 0 ? Math.round((num / total) * 100) : null;
   return (
-    <View style={[stylesKpi.wrap, { borderColor: color }]}>
-      <Text style={[stylesKpi.num, { color }]}>{value}</Text>
+    <View style={[stylesKpi.wrap, { borderLeftColor: color }]} testID={testID}>
       <Text style={stylesKpi.lbl}>{label}</Text>
+      <Text style={[stylesKpi.num, { color }]}>{num}</Text>
+      {total !== undefined && (
+        <Text style={stylesKpi.pct}>{num} / {total}{pct !== null ? ` (${pct}%)` : ""}</Text>
+      )}
     </View>
   );
 }
 
 const stylesKpi = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 2, alignItems: "center" },
-  num: { fontSize: 22, fontWeight: "900" },
-  lbl: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 2 },
+  wrap: {
+    flexBasis: "47%", flexGrow: 1,
+    backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md,
+    borderLeftWidth: 4, borderTopWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border,
+    gap: 2, minHeight: 88,
+  },
+  lbl: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  num: { fontSize: 26, fontWeight: "900", marginTop: 2 },
+  pct: { color: colors.muted, fontSize: 11, fontWeight: "600" },
 });
 
 const styles = StyleSheet.create({
@@ -248,6 +282,21 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
   kpiRow: { flexDirection: "row", gap: spacing.sm },
+  heroCard: { backgroundColor: colors.surfaceInverse, padding: spacing.xl, borderRadius: radius.lg, alignItems: "center", gap: 4 },
+  heroLbl: { color: "#94A3B8", fontSize: 11, fontWeight: "800", letterSpacing: 2 },
+  heroNum: { color: "#FFFFFF", fontSize: 56, fontWeight: "900" },
+  heroSub: { color: "#CBD5E1", fontSize: 13, fontWeight: "600" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  egliseChip: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.surfaceSecondary, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border, minHeight: 42,
+  },
+  egliseTxt: { color: colors.onSurface, fontWeight: "700", fontSize: 12 },
+  egliseCount: { backgroundColor: colors.brandPrimary, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
+  egliseCountTxt: { color: colors.onBrandPrimary, fontSize: 11, fontWeight: "800" },
   section: { gap: spacing.sm },
   sectionTitle: { color: colors.onSurface, fontSize: 17, fontWeight: "800" },
   sessionActions: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },

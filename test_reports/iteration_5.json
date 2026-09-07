@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 5 — Pôle 2 refinement (categorie_age + presence dashboard + Hub/Pasteur rework) validated end-to-end. Backend: extended /app/backend/tests/test_event_portal.py from 20 → 25 tests, all 25/25 PASS in 7.9s. New tests: TestCategorieAge (create + PATCH + public inscription accept & return categorie_age='Gédéon (-18)'/'CCMG (+30)'/'J-30 (18-30)' with GET-persistence verification) and TestPresenceDashboard (a) shape check with no active session confirms presence.total/membres/vip/prospects/externes/inconnus/gedeon/j30/ccmg/enfants_pointes ALL == 0 while by_age still aggregates over all participants, and (b) full scenario: 3 participants (Gédéon Membre @UDAMG Angers, J-30 Prospect w/ 'VIP' notes @UDAMG Paris, CCMG Externe NOT scanned) → start session → scan only 2 → +2 enfants → dashboard returns presence.total=2, membres=1, prospects=1, externes=0 (CCMG NOT counted because not scanned), vip=1 (VIP in notes detected), gedeon=1, j30=1, ccmg=0, enfants_pointes=0, by_eglise={UDAMG Angers:1, UDAMG Paris:1}, enfants_active_session=2, by_age counts all 3 categories over all participants regardless of scan. Regression 20 prior tests still 100% green (badge auto-numbering, public inscription, sessions auto-deactivation, pointages ok/already/423, enfants 423 without session, CSV/PDF exports, purge RBAC + SUPPRIMER guard). Frontend Playwright mobile 390x844 as admin@udamg.app: Hub screen shows exactly 3 primary buttons ('Ouvrir le Pointage', 'Gestion des Inscrits', 'Espace Pasteur (Dashboard)') + 'Outils' section with Comptage enfants + Lien d'inscription publique (all 5 testIDs hub-scanner/inscrits/pasteur/enfants/inscription FOUND, all 4 text labels present). Pasteur screen renders TOTAL PRÉSENTS hero card (dark blue, showing '1 · 50% de présence · 2 inscrits') + all 8 KPI boxes (kpi-membres/vip/prospects/enfants/gedeon/j30/ccmg/inconnus all FOUND with proper colors and X/Y ratio format) + 'Répartition par église (présents)' chips section with count badges. Inscrits bottom-sheet form 'Nouvel inscrit' has new 'Catégorie (Âge)' chip row with all 4 testIDs form-age-Enfant (-13)/Gédéon (-18)/J-30 (18-30)/CCMG (+30) FOUND. Public inscription /inscription?event=X after clicking a profil chip renders 'Catégorie d'âge' selector with all 4 testIDs insc-age-Enfant (-13)/Gédéon (-18)/J-30 (18-30)/CCMG (+30) FOUND. No red screens, no console errors (only harmless legacy shadow*/pointerEvents RN-Web warnings carried over from prior iterations).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Cosmetic RN-Web warnings: 'shadow*' style props deprecated (use boxShadow) and 'props.pointerEvents' deprecated (use style.pointerEvents). Non-blocking, carries over from iteration 4."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_event_portal.py",
+    "/app/test_reports/pytest/pytest_v5_results.xml"
+  ],
+  "action_items": [
+    "(None blocking) All new iteration-5 features (categorie_age field lifecycle, presence dashboard with active-session-only counting, VIP heuristic via notes, 8-KPI Pasteur dashboard, 3-button simplified Hub, age selectors in Inscrits/public inscription forms) verified working end-to-end.",
+    "(Cosmetic, carried over from iter 4) Migrate remaining shadow* style props to boxShadow to silence RN-Web deprecation warnings.",
+    "(Optional low, from iter 4) Add testID='insc-see-badge' to 'Voir mon badge' button on public inscription confirmation screen.",
+    "(Advisory) server.py has grown ~1440 lines. Consider splitting the EVENT PORTAL block into backend/event_routes.py for maintainability."
+  ],
+  "critical_code_review_comments": [
+    "Backend dashboard presence logic (server.py:1313-1345) correctly separates presence counters (active-session scan required) from by_age aggregation (all participants regardless of scan). Verified by test_presence_reflects_active_session_only: CCMG participant NOT scanned is absent from presence.ccmg (=0) but still counted in by_age['CCMG (+30)'].",
+    "VIP heuristic uses substring 'VIP' in notes.upper() (server.py:1335). Simple and works. Test confirms 'Invité VIP conférencier' is detected. Consider a dedicated boolean field in future if false positives arise (e.g. participant named 'Vipul').",
+    "PATCH /event/participants/{pid} uses exclude_unset with 'v is not None' filter (server.py:1115) — means categorie_age can be SET but NOT explicitly cleared to null via PATCH. Acceptable for current UX (chip toggle to another value works, but 'clear age' is not supported). Not a blocker.",
+    "server.py has grown to ~1440 lines — still over the 700-line split threshold flagged in iter 4. Recommend extracting EVENT PORTAL block (line 903+) into backend/event_routes.py.",
+    "Hub screen (hub.tsx) correctly uses 3 primary CTAs + a distinct 'Outils' section for secondary actions. Good IA hierarchy. testIDs preserved for backward compat with existing E2E scripts.",
+    "Pasteur screen (pasteur.tsx:123-130) KpiBox reuses `num / total` prop pattern consistently. by_profil['Prospect Évangélisé']+['Prospect Famille'] combined for kpi-prospects total denominator — matches backend presence.prospects grouping. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_event_portal.py",
+    "/app/test_reports/iteration_5.json",
+    "/app/test_reports/pytest/pytest_v5_results.xml"
+  ],
+  "success_rate": {"backend": "100% (25/25 event portal, including 5 new iter-5 tests)", "frontend": "100% (all 17 new testIDs FOUND, all 4 new text labels present, Hub + Pasteur + Inscrits form + public inscription flows verified)"},
+  "seed_data_creation": "Pytest creates TEST_-prefixed events (TEST_Event_Portal, TEST_NoSession, TEST_NoSess2, TEST_Event_V5_Age, TEST_V5_NoSess, TEST_V5_Presence) + TEST_-prefixed participants. Safe to purge via /api/event/participants/purge with SUPPRIMER confirmation as pasteur.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable: /app/backend/tests/test_event_portal.py (25 tests, ~8s sequential). IMPORTANT: run with -o addopts='' to disable pytest-xdist parallel workers because module-scope event_id/event_id_v5 fixtures are not shared across workers. Backend URL from frontend/.env EXPO_PUBLIC_BACKEND_URL=https://church-connect-255.preview.emergentagent.com. Credentials in /app/memory/test_credentials.md. New testIDs verified on web preview: kpi-membres/vip/prospects/enfants/gedeon/j30/ccmg/inconnus (Pasteur dashboard), form-age-Enfant (-13)/Gédéon (-18)/J-30 (18-30)/CCMG (+30) (Inscrits bottom-sheet), insc-age-Enfant (-13)/Gédéon (-18)/J-30 (18-30)/CCMG (+30) (public /inscription page). Old testIDs still functional: hub-scanner/inscrits/pasteur/enfants/inscription, evenement-card-{id}, inscrits-fab, insc-profil-{p}, login-email-input/password-input/submit-button. Public inscription still requires clicking a profil chip FIRST to reveal the form (prenom/nom/tel/email/eglise + age chips + confirm) — dynamic profil-based form working as specified. Backend presence.vip uses substring 'VIP' in notes.upper() — feed 'Invité VIP' or similar to test.",
+  "rca_of_issue": "N/A — no bug found. All 25 backend tests pass, all 17 new frontend testIDs and 4 new text labels verified present."
+}
