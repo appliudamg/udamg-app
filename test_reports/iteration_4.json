@@ -1,0 +1,42 @@
+{
+  "summary": "POLE 2 (Événements) event portal - full backend + frontend validation. Backend: 20 new pytest cases at /app/backend/tests/test_event_portal.py — all 20/20 pass sequentially (participants CRUD + auto EBED-XXXX numbering EBED-0001/0002 unique per event, public inscription no-auth, get-by-badge public, sessions start/stop with previous auto-deactivation, pointages 201/status=ok first + status=already duplicate, pointages 423 without active session, enfants accumulate + 423 without session, dashboard shape with total/by_profil/by_eglise/active_session/pointages_active_session/enfants_active_session, purge 400 without SUPPRIMER + 403 ouvrier + 200 pasteur with only_inconnus deleting only Inconnu profil, CSV export with header row + text/csv content-type, bilan PDF starting with %PDF-, RBAC evang 403 on start-session). Frontend Playwright end-to-end on mobile viewport 390x844 as admin@udamg.app: Menu → Événements card visible → tap opens portal /evenements with header 'PÔLE 2 · PORTAIL' + evenements-create FAB + 11 event cards. Tapping evenement-card-{id} opens hub with 5 action cards (Scanner/Inscrits/Enfants/Pasteur/Inscription publique) + 3 KPI counters + green active session banner ● TEST_Session2. Scanner: camera correctly shows 'Scanner caméra désactivé sur le preview web. Utilisez la saisie manuelle ci-dessous ou l'app Expo Go.' Manual input EBED-0001 → Valider → toast 'Bienvenue TEST_UI PLAYWRIGHT' + Derniers scans list updated. Inscrits: CSV + Inconnus + Tout header buttons, Tous/Membre/Inconnu/... tabs, search bar, FAB opens bottom-sheet 'Nouvel inscrit' with prenom/nom/profil chips/tel/email/eglise/notes/Enregistrer → toast 'Enregistré · EBED-0001' + participant appears in list with 'Voir badge →'. Enfants: big +1 green button, +N (multiple) and -1 buttons (correctly disabled when total=0), session banner shown, +1 increments 0→1. Pasteur: 6 KPI cards (Total/Pointés/Enfants/Membres/Inconnus/Prospects), 'Lancer une séance' + 'Rapport bilan PDF' buttons, active session with Arrêter + purger, Arrivées récentes list. Public inscription /inscription?event=X: profil selector step first (Membre/Inconnu/Prospect Évangélisé/Prospect Famille/Externe) → after profil click, dynamic fields appear (prenom/nom/tel/email/eglise/referent + submit) → 'Inscription confirmée' screen with generated badge_id EBED-0002 and 'Voir mon badge' link. Badge /badge?event=X&b=EBED-XXXX renders official pass card with real QR code (SVG), participant name, profil badge, and 'Sauvé par Grâce pour Sauver' tagline. All navigation, toasts, session banners, badge generation and QR rendering verified end-to-end. No red screens, no console errors (only harmless legacy shadow*/pointerEvents RN-Web deprecations carried from previous iteration). MongoDB _id excluded from all event portal responses. All 5 files_of_reference reviewed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "app/inscription.tsx", "issue": "Confirmation screen 'Voir mon badge' button is functional but lacks testID='insc-see-badge' as declared in the request contract. Currently only reachable by text selector.", "testID": "insc-see-badge", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Cosmetic RN-Web warning: 'shadow*' style props deprecated — use boxShadow. Non-blocking, carries over from previous iterations."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_event_portal.py",
+    "/app/test_reports/pytest/pytest_event_portal.xml"
+  ],
+  "action_items": [
+    "(LOW) Add testID='insc-see-badge' to the 'Voir mon badge' button on the inscription confirmation screen (app/inscription.tsx) to match the declared contract.",
+    "(Cosmetic, carries over) Migrate remaining shadow* style props to boxShadow to silence RN-Web deprecation warnings.",
+    "(Advisory) server.py has crossed 1300 lines. Consider splitting the event portal router into a separate module (backend/event_routes.py) for maintainability."
+  ],
+  "critical_code_review_comments": [
+    "Backend event portal is well-structured: separate APIRouter(prefix='/api/event'), 20+ endpoints, clean model layer, MongoDB unique indexes on (evenement_id, badge_id) and (evenement_id, participant_id, session_id) which enforce badge uniqueness and duplicate-pointage detection at DB level (nice — the try/except on insert becomes the 'already' branch cleanly).",
+    "_next_badge_id uses count_documents which is race-condition-prone under concurrent inscription. For high-load events (public inscription form shared widely) consider a Mongo findOneAndUpdate on a counters collection or use ObjectId monotonicity. Non-blocking for expected usage.",
+    "Pointage duplicate path returns 201 status code with body {status:'already'} — semantically OK, but 200 would be more conventional for 'no new resource created'. Frontend correctly interprets the body.status.",
+    "RBAC correctly enforced: purge/session-purge = pasteur only; sessions start/stop = pasteur+ouvrier; participant delete = pasteur+ouvrier; everything else = any authenticated user. by-badge and public inscription intentionally no-auth (correct for shareable badge/form).",
+    "Backend correctly maps MongoDB _id → id in all event portal responses via _participant_from_doc / _session_from_doc.",
+    "server.py has grown to ~1394 lines — over the 700-line split threshold. Recommend extracting the entire EVENT PORTAL block (line 903+) into backend/event_routes.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_event_portal.py",
+    "/app/test_reports/iteration_4.json",
+    "/app/test_reports/pytest/pytest_event_portal.xml"
+  ],
+  "success_rate": {"backend": "100% (20/20 event portal)", "frontend": "~95% (all critical flows OK, 1 minor missing testID)"},
+  "seed_data_creation": "Pytest creates TEST_-prefixed events (TEST_Event_Portal, TEST_NoSession, TEST_NoSess2) + TEST_-prefixed participants + TEST_Session1/2. Playwright run added: 1 Membre 'TEST_UI PLAYWRIGHT' via UI, 1 public inscription 'Public TESTUI' (EBED-0002), 1 pointage, 1 enfant. Left in DB for main agent to inspect; safe to purge via /api/event/participants/purge.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable: /app/backend/tests/test_event_portal.py (20 tests, ~5s). IMPORTANT: run with -o addopts='' to disable pytest-xdist parallel workers because the module-scope event_id fixture is not shared across workers (5 flakes when run in parallel, 0 when sequential). Backend URL from frontend/.env EXPO_PUBLIC_BACKEND_URL=https://church-connect-255.preview.emergentagent.com. Credentials in /app/memory/test_credentials.md. Verified event portal testIDs on web preview: evenements-create, evenement-card-{id}, hub-back/scanner/inscrits/enfants/pasteur/inscription, scanner-back/manual-input/manual-submit/pause/toggle-facing, inscrits-back/fab/search/export-csv, tab-Tous/Membre/Inconnu/..., form-prenom/nom/tel/email/notes/save/profil-{p}, enfants-back/total/plus/multi/minus, pasteur-back/start-session/bilan-pdf, insc-profil-{p}/prenom/nom/tel/email/eglise/referent/submit, badge-back/card/id. MISSING testID: insc-see-badge (button exists as text 'Voir mon badge' but no testID). Public inscription flow requires clicking a profil chip FIRST — only then do prenom/nom/... fields render (dynamic profil-based form working as specified).",
+  "rca_of_issue": "N/A — no bug found. Minor missing testID reported as LOW."
+}

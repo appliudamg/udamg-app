@@ -40,7 +40,13 @@
       "expo-web-browser",
       "expo-status-bar",
       "@react-native-vector-icons/material-design-icons",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autoriser UDAMG à utiliser la caméra pour scanner les badges QR"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

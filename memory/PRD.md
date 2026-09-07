@@ -1,41 +1,89 @@
 # UDAMG APP - PRD
 
 ## Vision
-Mobile-first app for the **UDAMG church community** — evangelism fieldwork + church events. Slogan *"Sauvé par Grâce pour Sauver"*.
+Application mobile complète pour la communauté UDAMG — évangélisation + gestion d'événements avec pointage.
 
 ## Stack
-- **Frontend**: React Native / Expo Router / TanStack Query / expo-web-browser + expo-linking (Google Auth) / expo-file-system + expo-sharing (exports).
-- **Backend**: FastAPI + MongoDB. Argon2 password hashing + our own JWT. Emergent-managed Google OAuth via `/api/auth/session`. Excel via `openpyxl`, PDF via `reportlab`.
-- **Design**: pure white + royal blue (#0047AB).
+- **Frontend**: React Native / Expo Router / TanStack Query / `expo-camera` (QR scan) / `react-native-qrcode-svg` (badge) / `@gorhom/bottom-sheet` / `expo-file-system` + `expo-sharing`
+- **Backend**: FastAPI + MongoDB (Argon2 + JWT), Emergent-managed Google OAuth, `openpyxl` (Excel), `reportlab` (PDF)
+- **Design**: pure white + royal blue (#0047AB)
 
-## Roles
-- **pasteur** — voit tout, supprime, exporte, journal complet
-- **ouvrier** — voit toute église du contexte, archive/transfère, journal de ses actions
-- **evangeliste** — ne voit QUE ses propres fiches, ses propres rappels, ses propres transferts
+## Rôles (RBAC)
+- **pasteur** — voit tout, supprime, exporte, journaux, purge
+- **ouvrier** — voit toute église/événement, archive/transfère, contrôle des séances
+- **evangeliste** — ne voit QUE ses propres fiches (évangélisation), inscrits publics OK
 
-## Data Model (MongoDB)
-`users` (email, nom, prenom, password_hash, role, google_id, picture, disabled) · `villes` · `programmes` · `contacts` · `anciens` · `transferts` · `evenements` · `invitations`
+## Pôle 1 — Évangélisation (déjà livré, INCHANGÉ dans cette itération)
+Menu → Évangélisation → Églises/Programmes/Rappels/Journal transferts → Contexte → Liste des Âmes → Stats (Excel/PDF exports).
 
-## Pôle 1 — Évangélisation (complete)
-Menu → Évangélisation → Églises OU Programmes OU **Rappels** OU **Journal transferts**.
+## Pôle 2 — Événements & Émargement (livré dans cette itération)
 
-Contextes → menu 4 boutons → Catégories → Liste des Âmes.
+### Portail multi-programmes
+`Menu → Événements` = liste des programmes avec badge d'ajout `+` (pasteur/ouvrier). Modal de création (titre, lieu, ville, date ISO, type).
 
-### Screens
-Login (email/password **+ Google**) · Register · Menu Principal · Évangélisation submenu (2 grandes cartes + 2 outils) · Églises (grid + Bilan Global) · Programmes (avec modal code) · Menu contextuel · Vue Catégories · Liste des Âmes (recherche accents-insensible, cartes avec WA/SMS/Relance/Options) · Bottom Sheet Ajout/Modif · Modales Options/Relance/Transfert · **Stats (téléchargements Excel/PDF réels)** · Anciens · **Rappels automatiques** (filtres 3/7/14/30 j) · **Journal des transferts** (recherche) · Profile · Événements (liste, détail, invitation anciens ✨).
+### Hub d'accueil par événement
+Bannière de séance active/inactive + 3 KPI (Inscrits/Pointés/Enfants) + 5 actions :
+- 📷 Scanner de pointage
+- 👥 Gestion des inscrits
+- 🧒 Comptage enfants
+- ⛪ Espace Pasteur (rôle pastoral)
+- 📝 Inscription publique (deep link vers `/inscription?event=…`)
 
-### Nouveautés livrées dans cette itération
-1. **Google Login (Emergent-managed)** — bouton `Continuer avec Google` sur login. Le flow gère mobile (`WebBrowser.openAuthSessionAsync` + fallback deep link + `getInitialURL`) et web (`window.location.href` + parsing hash/query au montage). Backend échange le `session_id` avec `demobackend.emergentagent.com/auth/v1/env/oauth/session-data` et upsert l'utilisateur en émettant notre propre JWT.
-2. **Exports réels Excel + PDF** — endpoints `/api/exports/contacts.xlsx`, `/contacts.pdf`, `/contacts-lots.pdf`.
-   - Excel : onglet Résumé + onglet par catégorie + bilan par église en mode GLOBAL.
-   - PDF standard : table complète triée alphabétiquement.
-   - PDF EBED : chunking 10 par page, colonne Niveau masquée.
-   - Frontend : `expo-file-system` télécharge le fichier avec Bearer, puis `expo-sharing` ouvre la feuille système de partage/enregistrement. Sur web : blob download automatique.
-3. **Journal des transferts** — endpoint `/api/transferts` avec recherche full-text (contact, église, responsable) et RBAC (pasteur/ouvrier voient tout, évangéliste voit ses propres actions). Écran dédié avec cartes de-vers.
-4. **Rappels automatiques** — endpoint `/api/rappels?days=N` : contacts encore au niveau 1 après `days` jours. Écran avec chips 3/7/14/30 j, empty state 🎉, actions WhatsApp/SMS pré-remplies. RBAC respecté (évangéliste ne voit que les siens).
+### Scanner (`(app)/event/[id]/scanner`)
+- `expo-camera` avec `barcodeScannerSettings.barcodeTypes: ["qr", "code128", "code39"]`
+- Verrouillage **strict** si aucune séance active (backend 423 + banner)
+- Facing switch (avant/arrière), Pause/Reprise, saisie manuelle EBED-XXXX
+- Overlay résultat coloré (vert=OK, orange=déjà pointé, rouge=erreur)
+- Historique défilant des 10 derniers scans + toasts
+- Cooldown 1.5s anti-doublon lecture
 
-## Pôle 2 — Événements (v1)
-Liste + détail + Inviter les anciens ✨ (pasteur only).
+### Inscrits (`(app)/event/[id]/inscrits`)
+- Toolbar : Export CSV, Purge Inconnus/Tout (avec confirmation manuscrite `SUPPRIMER`)
+- Onglets scrollables : Tous / Membre / Inconnu / Prospect Évangélisé / Prospect Famille / Externe
+- Recherche accents-insensible (nom, badge, tel, église)
+- Cartes avec badge coloré profil, pastilles SMS/WhatsApp
+- Bouton "Voir badge" → écran badge public
+- Bottom Sheet CRUD (Prénom, Nom, Profil chips, Tel, Email, Église chips depuis /villes, Notes)
+- Long-press = supprimer (pasteur)
+- Auto-attribution `EBED-XXXX` séquentielle par événement
 
-## Business Enhancement
-Le triptyque **Rappels + Exports + Journal** convertit l'app UDAMG d'un simple carnet en un **tableau de bord pastoral mesurable**. Les pasteurs peuvent d'un clic exporter le rapport Excel de leur église pour un board meeting, et les évangélistes reçoivent une "to-do list" hebdomadaire des âmes stagnantes.
+### Comptage enfants (`(app)/event/[id]/enfants`)
+- Compteur géant temps réel (auto-refresh 3s)
+- Bouton `+1` XL, boutons `+N` multiple et `-1`
+- Verrouillé si aucune séance active
+
+### Espace Pasteur (`(app)/event/[id]/pasteur`)
+- 6 KPI (Total, Pointés, Enfants, Membres, Inconnus, Prospects)
+- Contrôle des séances : Lancer (auto-arrêt de la précédente) / Arrêter / Purger pointages (SUPPRIMER)
+- Rapport bilan PDF (téléchargement immédiat)
+- Historique des séances + arrivées récentes en temps réel (refetch 4s)
+
+### Inscription publique (`/inscription?event=…`)
+- Écran **sans authentification** partageable
+- Sélecteur de profil visuel 5 cartes + guide contextuel
+- Champs dynamiques : email/tel/église/référent selon profil
+- Confirmation avec badge attribué + CTA "Voir mon badge"
+
+### Badge public (`/badge?event=…&b=EBED-XXXX`)
+- Carte-pass 320×470 fond blanc + cadre doré `#D4A017`
+- QR Code SVG scannable (`react-native-qrcode-svg`)
+- Nom/Prénom, profil coloré, ID badge, église
+- Bandeau bas "Sauvé par Grâce pour Sauver"
+
+### Système de Toasts
+`ToastProvider` global — 3 variantes (success/error/info), auto-dismiss 3.2s, coin bas droite.
+
+## Modèle de données (Événements)
+- `evenements` — titre, description, date, lieu, ville, type_evenement, intervenants, image_url
+- `event_participants` — evenement_id, **badge_id (EBED-XXXX unique par évt)**, nom (UPPER), prenom, profil, tel, email, eglise, jours_presence[], referent, notes, sms_status, wa_status
+- `event_sessions` — evenement_id, nom, active, started_at, ended_at
+- `event_pointages` — evenement_id, participant_id, session_id, scanned_by, timestamp (unique par (participant, session))
+- `event_enfants` — evenement_id, session_id, delta, by, timestamp
+
+## Endpoints (12 nouveaux)
+GET/POST/PATCH/DELETE `/api/event/participants` · POST `/api/event/participants/public` · GET `/api/event/participants/by-badge/{id}` · POST `/api/event/participants/purge` · GET/POST `/api/event/sessions[/start|/:id/stop|/purge-pointages]` · POST `/api/event/pointages` · GET `/api/event/pointages` · GET/POST `/api/event/enfants` · GET `/api/event/dashboard` · GET `/api/event/exports/participants.csv|bilan.pdf`
+
+## Comptes de démo
+`admin@udamg.app` / `AdminUdamg2026!` (Pasteur) · `ouvrier@udamg.app` / `OuvrierUdamg2026!` · `evangeliste@udamg.app` / `EvangUdamg2026!`
+
+Codes programmes évangélisation : `EBED2026`, `RETRAITE`. Google Login via Emergent OAuth disponible sur `/login`.

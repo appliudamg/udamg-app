@@ -212,6 +212,13 @@ async def lifespan(app: FastAPI):
     await db.transferts.create_index("timestamp")
     await db.evenements.create_index("date")
     await db.invitations.create_index([("evenement_id", 1), ("user_id", 1)], unique=True)
+    # Event portal collections
+    await db.event_participants.create_index([("evenement_id", 1), ("badge_id", 1)], unique=True)
+    await db.event_participants.create_index([("evenement_id", 1), ("nom", 1)])
+    await db.event_sessions.create_index("evenement_id")
+    await db.event_pointages.create_index([("evenement_id", 1), ("participant_id", 1), ("session_id", 1)], unique=True)
+    await db.event_pointages.create_index("timestamp")
+    await db.event_enfants.create_index([("evenement_id", 1), ("session_id", 1)])
     await _seed(db)
     yield
     client.close()
@@ -891,3 +898,497 @@ async def export_pdf_lots(context_type: str, context_id: str, user=Depends(curre
 
 
 app.include_router(api)
+
+
+# =========================================================================== #
+# ============================ EVENT PORTAL ================================= #
+# =========================================================================== #
+# Multi-programmes event management with participants, badges (EBED-XXXX),
+# sessions, QR pointage, children count, and pastoral dashboard.
+# =========================================================================== #
+
+PROFILS = ["Membre", "Inconnu", "Prospect Évangélisé", "Prospect Famille", "Externe"]
+
+
+class ParticipantIn(BaseModel):
+    evenement_id: str
+    nom: str
+    prenom: str
+    profil: str
+    tel: Optional[str] = None
+    email: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: List[str] = []
+    referent: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ParticipantUpdate(BaseModel):
+    nom: Optional[str] = None
+    prenom: Optional[str] = None
+    profil: Optional[str] = None
+    tel: Optional[str] = None
+    email: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: Optional[List[str]] = None
+    referent: Optional[str] = None
+    notes: Optional[str] = None
+    sms_status: Optional[str] = None
+    wa_status: Optional[str] = None
+
+
+class Participant(BaseModel):
+    id: str
+    evenement_id: str
+    badge_id: str
+    nom: str
+    prenom: str
+    profil: str
+    tel: Optional[str] = None
+    email: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: List[str] = []
+    referent: Optional[str] = None
+    notes: Optional[str] = None
+    sms_status: str = "none"   # none | pending | sent
+    wa_status: str = "none"
+    created_at: datetime
+
+
+class SessionIn(BaseModel):
+    evenement_id: str
+    nom: str
+
+
+class EventSession(BaseModel):
+    id: str
+    evenement_id: str
+    nom: str
+    active: bool
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+
+
+class PointageIn(BaseModel):
+    evenement_id: str
+    badge_id: str
+
+
+class EnfantsIn(BaseModel):
+    evenement_id: str
+    delta: int
+
+
+def _participant_from_doc(d: dict) -> Participant:
+    return Participant(
+        id=d["_id"], evenement_id=d["evenement_id"], badge_id=d["badge_id"],
+        nom=d["nom"], prenom=d["prenom"], profil=d.get("profil", "Externe"),
+        tel=d.get("tel"), email=d.get("email"), eglise=d.get("eglise"),
+        jours_presence=d.get("jours_presence", []),
+        referent=d.get("referent"), notes=d.get("notes"),
+        sms_status=d.get("sms_status", "none"),
+        wa_status=d.get("wa_status", "none"),
+        created_at=d.get("created_at", datetime.now(timezone.utc)),
+    )
+
+
+async def _next_badge_id(db, evenement_id: str) -> str:
+    count = await db.event_participants.count_documents({"evenement_id": evenement_id})
+    return f"EBED-{count + 1:04d}"
+
+
+# --- Participants CRUD (public inscription allowed via /public route below) --
+event_api = APIRouter(prefix="/api/event")
+
+
+@event_api.get("/participants")
+async def list_participants(evenement_id: str, profil: Optional[str] = None,
+                            eglise: Optional[str] = None, q: Optional[str] = None,
+                            _=Depends(current_user)):
+    query: dict = {"evenement_id": evenement_id}
+    if profil: query["profil"] = profil
+    if eglise: query["eglise"] = eglise
+    docs = await app.state.db.event_participants.find(query).sort("nom", 1).to_list(5000)
+    if q:
+        s = strip_accents(q)
+        docs = [d for d in docs if s in strip_accents(
+            f"{d.get('nom','')} {d.get('prenom','')} {d.get('badge_id','')} {d.get('tel','') or ''} {d.get('eglise','') or ''}"
+        )]
+    return [_participant_from_doc(d).model_dump() for d in docs]
+
+
+@event_api.post("/participants", status_code=201)
+async def create_participant(data: ParticipantIn, user=Depends(current_user)):
+    if data.profil not in PROFILS:
+        raise HTTPException(400, f"Profil invalide (attendus : {PROFILS})")
+    badge_id = await _next_badge_id(app.state.db, data.evenement_id)
+    doc = {
+        "_id": str(uuid4()),
+        "evenement_id": data.evenement_id,
+        "badge_id": badge_id,
+        "nom": data.nom.strip().upper(),
+        "prenom": data.prenom.strip(),
+        "profil": data.profil,
+        "tel": data.tel,
+        "email": (data.email or "").strip().lower() or None,
+        "eglise": data.eglise,
+        "jours_presence": data.jours_presence,
+        "referent": data.referent or f"{user['prenom']} {user['nom']}",
+        "notes": data.notes,
+        "sms_status": "none",
+        "wa_status": "none",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await app.state.db.event_participants.insert_one(doc)
+    return _participant_from_doc(doc).model_dump()
+
+
+class PublicParticipantIn(BaseModel):
+    evenement_id: str
+    nom: str
+    prenom: str
+    profil: str
+    tel: Optional[str] = None
+    email: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: List[str] = []
+    referent: Optional[str] = None
+
+
+@event_api.post("/participants/public", status_code=201)
+async def public_inscription(data: PublicParticipantIn):
+    """Public endpoint (no auth) used by the shareable inscription form."""
+    if data.profil not in PROFILS:
+        raise HTTPException(400, "Profil invalide")
+    evt = await app.state.db.evenements.find_one({"_id": data.evenement_id})
+    if not evt:
+        raise HTTPException(404, "Événement introuvable")
+    badge_id = await _next_badge_id(app.state.db, data.evenement_id)
+    doc = {
+        "_id": str(uuid4()),
+        "evenement_id": data.evenement_id,
+        "badge_id": badge_id,
+        "nom": data.nom.strip().upper(),
+        "prenom": data.prenom.strip(),
+        "profil": data.profil,
+        "tel": data.tel,
+        "email": (data.email or "").strip().lower() or None,
+        "eglise": data.eglise,
+        "jours_presence": data.jours_presence,
+        "referent": data.referent,
+        "notes": None,
+        "sms_status": "none",
+        "wa_status": "none",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await app.state.db.event_participants.insert_one(doc)
+    return _participant_from_doc(doc).model_dump()
+
+
+@event_api.get("/participants/{pid}")
+async def get_participant(pid: str, _=Depends(current_user)):
+    d = await app.state.db.event_participants.find_one({"_id": pid})
+    if not d: raise HTTPException(404, "Participant introuvable")
+    return _participant_from_doc(d).model_dump()
+
+
+@event_api.get("/participants/by-badge/{badge_id}")
+async def get_by_badge(badge_id: str, evenement_id: str):
+    """Public — used by badge page to render the ticket."""
+    d = await app.state.db.event_participants.find_one({"badge_id": badge_id, "evenement_id": evenement_id})
+    if not d: raise HTTPException(404, "Badge introuvable")
+    return _participant_from_doc(d).model_dump()
+
+
+@event_api.patch("/participants/{pid}")
+async def update_participant(pid: str, data: ParticipantUpdate, _=Depends(current_user)):
+    existing = await app.state.db.event_participants.find_one({"_id": pid})
+    if not existing: raise HTTPException(404, "Participant introuvable")
+    updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+    if "nom" in updates: updates["nom"] = updates["nom"].strip().upper()
+    if "profil" in updates and updates["profil"] not in PROFILS:
+        raise HTTPException(400, "Profil invalide")
+    await app.state.db.event_participants.update_one({"_id": pid}, {"$set": updates})
+    fresh = await app.state.db.event_participants.find_one({"_id": pid})
+    return _participant_from_doc(fresh).model_dump()
+
+
+@event_api.delete("/participants/{pid}", status_code=204)
+async def delete_participant(pid: str, _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER))):
+    await app.state.db.event_participants.delete_one({"_id": pid})
+    return None
+
+
+class PurgeInput(BaseModel):
+    evenement_id: str
+    confirmation: str
+    only_inconnus: bool = False
+
+
+@event_api.post("/participants/purge")
+async def purge_participants(data: PurgeInput, _=Depends(require_role(ROLE_PASTEUR))):
+    if data.confirmation != "SUPPRIMER":
+        raise HTTPException(400, "Confirmation manquante — tapez SUPPRIMER")
+    query: dict = {"evenement_id": data.evenement_id}
+    if data.only_inconnus:
+        query["profil"] = "Inconnu"
+    res = await app.state.db.event_participants.delete_many(query)
+    return {"deleted": res.deleted_count}
+
+
+# --- Sessions -------------------------------------------------------------- #
+def _session_from_doc(d: dict) -> EventSession:
+    return EventSession(
+        id=d["_id"], evenement_id=d["evenement_id"], nom=d["nom"],
+        active=d.get("active", False), started_at=d["started_at"],
+        ended_at=d.get("ended_at"),
+    )
+
+
+@event_api.get("/sessions")
+async def list_sessions(evenement_id: str, _=Depends(current_user)):
+    docs = await app.state.db.event_sessions.find({"evenement_id": evenement_id}).sort("started_at", -1).to_list(200)
+    return [_session_from_doc(d).model_dump() for d in docs]
+
+
+@event_api.get("/sessions/active")
+async def get_active_session(evenement_id: str, _=Depends(current_user)):
+    d = await app.state.db.event_sessions.find_one({"evenement_id": evenement_id, "active": True})
+    return _session_from_doc(d).model_dump() if d else None
+
+
+@event_api.post("/sessions/start", status_code=201)
+async def start_session(data: SessionIn, _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER))):
+    # Deactivate any prior active session for this event
+    await app.state.db.event_sessions.update_many(
+        {"evenement_id": data.evenement_id, "active": True},
+        {"$set": {"active": False, "ended_at": datetime.now(timezone.utc)}},
+    )
+    doc = {
+        "_id": str(uuid4()),
+        "evenement_id": data.evenement_id,
+        "nom": data.nom.strip(),
+        "active": True,
+        "started_at": datetime.now(timezone.utc),
+    }
+    await app.state.db.event_sessions.insert_one(doc)
+    return _session_from_doc(doc).model_dump()
+
+
+@event_api.post("/sessions/{sid}/stop")
+async def stop_session(sid: str, _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER))):
+    await app.state.db.event_sessions.update_one(
+        {"_id": sid},
+        {"$set": {"active": False, "ended_at": datetime.now(timezone.utc)}},
+    )
+    return {"ok": True}
+
+
+class SessionPurge(BaseModel):
+    session_id: str
+    confirmation: str
+
+
+@event_api.post("/sessions/purge-pointages")
+async def purge_session_pointages(data: SessionPurge, _=Depends(require_role(ROLE_PASTEUR))):
+    if data.confirmation != "SUPPRIMER":
+        raise HTTPException(400, "Confirmation manquante")
+    res = await app.state.db.event_pointages.delete_many({"session_id": data.session_id})
+    return {"deleted": res.deleted_count}
+
+
+# --- Pointages (QR check-in) ---------------------------------------------- #
+@event_api.post("/pointages", status_code=201)
+async def create_pointage(data: PointageIn, user=Depends(current_user)):
+    active = await app.state.db.event_sessions.find_one({"evenement_id": data.evenement_id, "active": True})
+    if not active:
+        raise HTTPException(423, "Aucune séance active — le Pasteur doit démarrer une séance")
+    p = await app.state.db.event_participants.find_one({"badge_id": data.badge_id, "evenement_id": data.evenement_id})
+    if not p:
+        raise HTTPException(404, "Badge inconnu pour cet événement")
+    try:
+        doc = {
+            "_id": str(uuid4()),
+            "evenement_id": data.evenement_id,
+            "participant_id": p["_id"],
+            "session_id": active["_id"],
+            "scanned_by": user["email"],
+            "timestamp": datetime.now(timezone.utc),
+        }
+        await app.state.db.event_pointages.insert_one(doc)
+        return {
+            "status": "ok",
+            "participant": _participant_from_doc(p).model_dump(),
+            "session_nom": active["nom"],
+            "timestamp": doc["timestamp"].isoformat(),
+        }
+    except Exception:
+        # Duplicate = already scanned this session
+        return {
+            "status": "already",
+            "participant": _participant_from_doc(p).model_dump(),
+            "session_nom": active["nom"],
+        }
+
+
+@event_api.get("/pointages")
+async def list_pointages(evenement_id: str, session_id: Optional[str] = None,
+                         limit: int = 50, _=Depends(current_user)):
+    query: dict = {"evenement_id": evenement_id}
+    if session_id: query["session_id"] = session_id
+    docs = await app.state.db.event_pointages.find(query).sort("timestamp", -1).to_list(limit)
+    out = []
+    for d in docs:
+        p = await app.state.db.event_participants.find_one({"_id": d["participant_id"]})
+        out.append({
+            "id": d["_id"],
+            "timestamp": d["timestamp"].isoformat(),
+            "session_id": d["session_id"],
+            "scanned_by": d.get("scanned_by", ""),
+            "participant": _participant_from_doc(p).model_dump() if p else None,
+        })
+    return out
+
+
+# --- Children counter ----------------------------------------------------- #
+@event_api.post("/enfants")
+async def add_enfants(data: EnfantsIn, user=Depends(current_user)):
+    active = await app.state.db.event_sessions.find_one({"evenement_id": data.evenement_id, "active": True})
+    if not active:
+        raise HTTPException(423, "Aucune séance active")
+    entry = {
+        "_id": str(uuid4()),
+        "evenement_id": data.evenement_id,
+        "session_id": active["_id"],
+        "delta": data.delta,
+        "by": user["email"],
+        "timestamp": datetime.now(timezone.utc),
+    }
+    await app.state.db.event_enfants.insert_one(entry)
+    total = 0
+    async for e in app.state.db.event_enfants.find({"evenement_id": data.evenement_id, "session_id": active["_id"]}):
+        total += e.get("delta", 0)
+    return {"total": total, "session_id": active["_id"], "session_nom": active["nom"]}
+
+
+@event_api.get("/enfants")
+async def get_enfants(evenement_id: str, session_id: Optional[str] = None, _=Depends(current_user)):
+    if not session_id:
+        active = await app.state.db.event_sessions.find_one({"evenement_id": evenement_id, "active": True})
+        if not active: return {"total": 0, "session_id": None, "session_nom": None}
+        session_id = active["_id"]
+    total = 0
+    async for e in app.state.db.event_enfants.find({"evenement_id": evenement_id, "session_id": session_id}):
+        total += e.get("delta", 0)
+    sess = await app.state.db.event_sessions.find_one({"_id": session_id})
+    return {"total": total, "session_id": session_id, "session_nom": sess["nom"] if sess else None}
+
+
+# --- Dashboard stats ------------------------------------------------------ #
+@event_api.get("/dashboard")
+async def dashboard(evenement_id: str, _=Depends(current_user)):
+    db = app.state.db
+    parts = await db.event_participants.find({"evenement_id": evenement_id}).to_list(10000)
+    active = await db.event_sessions.find_one({"evenement_id": evenement_id, "active": True})
+    pointages_count = 0
+    enfants_total = 0
+    if active:
+        pointages_count = await db.event_pointages.count_documents({"session_id": active["_id"]})
+        async for e in db.event_enfants.find({"session_id": active["_id"]}):
+            enfants_total += e.get("delta", 0)
+    by_profil = {p: 0 for p in PROFILS}
+    by_eglise: dict = {}
+    for p in parts:
+        by_profil[p.get("profil", "Externe")] = by_profil.get(p.get("profil", "Externe"), 0) + 1
+        e = p.get("eglise") or "—"
+        by_eglise[e] = by_eglise.get(e, 0) + 1
+    return {
+        "total": len(parts),
+        "by_profil": by_profil,
+        "by_eglise": by_eglise,
+        "active_session": _session_from_doc(active).model_dump() if active else None,
+        "pointages_active_session": pointages_count,
+        "enfants_active_session": enfants_total,
+    }
+
+
+# --- Exports (event) ------------------------------------------------------ #
+@event_api.get("/exports/participants.csv")
+async def export_participants_csv(evenement_id: str, _=Depends(current_user)):
+    docs = await app.state.db.event_participants.find({"evenement_id": evenement_id}).sort("nom", 1).to_list(10000)
+    lines = ["badge_id,nom,prenom,profil,eglise,tel,email,referent,jours_presence,sms_status,wa_status,created_at"]
+    for d in docs:
+        row = [
+            d.get("badge_id", ""), d.get("nom", ""), d.get("prenom", ""),
+            d.get("profil", ""), d.get("eglise", "") or "",
+            d.get("tel", "") or "", d.get("email", "") or "",
+            d.get("referent", "") or "",
+            "|".join(d.get("jours_presence", [])),
+            d.get("sms_status", "none"), d.get("wa_status", "none"),
+            d.get("created_at").isoformat() if d.get("created_at") else "",
+        ]
+        lines.append(",".join('"' + str(c).replace('"', '""') + '"' for c in row))
+    buf = io.BytesIO(("\n".join(lines)).encode("utf-8"))
+    return StreamingResponse(buf, media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="participants.csv"'})
+
+
+@event_api.get("/exports/bilan.pdf")
+async def export_bilan_pdf(evenement_id: str, user=Depends(current_user)):
+    db = app.state.db
+    evt = await db.evenements.find_one({"_id": evenement_id})
+    if not evt: raise HTTPException(404, "Événement introuvable")
+    parts = await db.event_participants.find({"evenement_id": evenement_id}).to_list(10000)
+    sessions = await db.event_sessions.find({"evenement_id": evenement_id}).sort("started_at", 1).to_list(200)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm, topMargin=1.5*cm, bottomMargin=1.5*cm)
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph(f"<b>UDAMG</b> — Rapport Bilan Pastoral", styles["Title"]),
+        Paragraph(f"<b>{evt.get('titre', '')}</b>", styles["Heading2"]),
+        Paragraph(f"Généré le {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')}", styles["Normal"]),
+        Spacer(1, 0.4*cm),
+        Paragraph(f"<b>Total inscrits :</b> {len(parts)}", styles["Normal"]),
+    ]
+    # Profils
+    by_profil = {p: 0 for p in PROFILS}
+    for p in parts:
+        by_profil[p.get("profil", "Externe")] = by_profil.get(p.get("profil", "Externe"), 0) + 1
+    prof_rows = [["Profil", "Nombre"]] + [[p, str(v)] for p, v in by_profil.items()]
+    t = Table(prof_rows, hAlign="LEFT", colWidths=[8*cm, 3*cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#0047AB")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.4, rl_colors.HexColor("#CBD5E1")),
+    ]))
+    story += [Spacer(1, 0.4*cm), Paragraph("<b>Répartition par profil</b>", styles["Heading3"]), t]
+
+    # Sessions
+    if sessions:
+        story += [Spacer(1, 0.4*cm), Paragraph("<b>Séances & pointages</b>", styles["Heading3"])]
+        rows = [["Séance", "Statut", "Pointages", "Enfants"]]
+        for s in sessions:
+            pcount = await db.event_pointages.count_documents({"session_id": s["_id"]})
+            ecount = 0
+            async for e in db.event_enfants.find({"session_id": s["_id"]}):
+                ecount += e.get("delta", 0)
+            status = "Active" if s.get("active") else "Terminée"
+            rows.append([s["nom"], status, str(pcount), str(ecount)])
+        t2 = Table(rows, hAlign="LEFT")
+        t2.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#0047AB")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.4, rl_colors.HexColor("#CBD5E1")),
+        ]))
+        story.append(t2)
+
+    doc.build(story)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="bilan_{evenement_id}.pdf"'})
+
+
+app.include_router(event_api)

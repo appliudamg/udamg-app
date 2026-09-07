@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { AuthProvider } from "@/src/auth";
+import { ToastProvider } from "@/src/toast";
 import { colors } from "@/src/theme";
 
 LogBox.ignoreAllLogs(true);
@@ -20,13 +21,15 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
-              <StatusBar style="dark" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.surface },
-                }}
-              />
+              <ToastProvider>
+                <StatusBar style="dark" />
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.surface },
+                  }}
+                />
+              </ToastProvider>
             </AuthProvider>
           </QueryClientProvider>
         </SafeAreaProvider>
