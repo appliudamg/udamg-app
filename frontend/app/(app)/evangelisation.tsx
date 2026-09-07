@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, ImageBackground } from "
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
 
 const EGLISES_IMG = "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjb21tdW5pdHklMjBncm91cCUyMG1lZXRpbmclMjBmcmllbmRzfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
@@ -10,6 +11,8 @@ const PROG_IMG = "https://images.unsplash.com/photo-1762967019514-232e7fc815a1?c
 export default function Evangelisation() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
+  const canSeeAll = user?.role === "pasteur" || user?.role === "ouvrier";
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -58,6 +61,40 @@ export default function Evangelisation() {
             </View>
           </ImageBackground>
         </Pressable>
+
+        <Text style={styles.sectionTitle}>Outils d'accompagnement</Text>
+
+        <Pressable
+          testID="evang-rappels-card"
+          onPress={() => router.push("/(app)/rappels")}
+          style={({ pressed }) => [styles.miniCard, pressed && { opacity: 0.9 }]}
+        >
+          <View style={[styles.miniIcon, { backgroundColor: "#EF4444" }]}>
+            <Text style={styles.miniEmoji}>🔔</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.miniTitle}>Rappels automatiques</Text>
+            <Text style={styles.miniSub}>Âmes stagnantes à relancer</Text>
+          </View>
+          <Text style={styles.chev}>›</Text>
+        </Pressable>
+
+        {canSeeAll && (
+          <Pressable
+            testID="evang-transferts-card"
+            onPress={() => router.push("/(app)/transferts")}
+            style={({ pressed }) => [styles.miniCard, pressed && { opacity: 0.9 }]}
+          >
+            <View style={[styles.miniIcon, { backgroundColor: colors.warning }]}>
+              <Text style={styles.miniEmoji}>🔀</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.miniTitle}>Journal des transferts</Text>
+              <Text style={styles.miniSub}>Historique des déplacements</Text>
+            </View>
+            <Text style={styles.chev}>›</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </View>
   );
@@ -71,9 +108,9 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 26, fontWeight: "800", color: colors.onSurface },
   scroll: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.lg },
-  subtitle: { color: colors.muted, fontStyle: "italic", textAlign: "center", marginBottom: spacing.md },
+  subtitle: { color: colors.muted, fontStyle: "italic", textAlign: "center", marginBottom: spacing.sm },
   card: {
-    height: 200, borderRadius: radius.lg, overflow: "hidden",
+    height: 180, borderRadius: radius.lg, overflow: "hidden",
     backgroundColor: colors.surfaceSecondary,
     shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
@@ -81,6 +118,17 @@ const styles = StyleSheet.create({
   cardImage: { borderRadius: radius.lg },
   cardOverlay: { padding: spacing.xl, gap: spacing.xs },
   cardEyebrow: { color: "#EFF6FF", fontSize: 12, fontWeight: "700", letterSpacing: 2 },
-  cardTitle: { color: "#FFFFFF", fontSize: 26, fontWeight: "800" },
+  cardTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "800" },
   cardSubtitle: { color: "#E2E8F0", fontSize: 13 },
+  sectionTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800", marginTop: spacing.md, marginBottom: 0 },
+  miniCard: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    padding: spacing.lg, backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
+  },
+  miniIcon: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  miniEmoji: { fontSize: 20 },
+  miniTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
+  miniSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  chev: { color: colors.brandPrimary, fontSize: 24, fontWeight: "700" },
 });

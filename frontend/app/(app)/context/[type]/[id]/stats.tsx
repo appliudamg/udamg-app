@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, ContactStats, Programme } from "@/src/api";
+import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function StatsScreen() {
@@ -11,6 +13,8 @@ export default function StatsScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const { type, id, nom } = useLocalSearchParams<{ type: string; id: string; nom?: string }>();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["contact-stats", type, id],
@@ -26,7 +30,25 @@ export default function StatsScreen() {
 
   const isEbed = type === "programme" && programmes?.find(p => p.id === id)?.is_ebed;
 
-  const notImpl = (label: string) => Alert.alert("Bientôt disponible", `${label} sera actif après connexion à un service d'export dans la v2.`);
+  const runExport = async (kind: "xlsx" | "pdf" | "pdf-lots") => {
+    const path =
+      kind === "xlsx" ? `/exports/contacts.xlsx?context_type=${type}&context_id=${id}` :
+      kind === "pdf" ? `/exports/contacts.pdf?context_type=${type}&context_id=${id}` :
+      `/exports/contacts-lots.pdf?context_type=${type}&context_id=${id}`;
+    const ext = kind === "xlsx" ? "xlsx" : "pdf";
+    const suffix = kind === "pdf-lots" ? "_lots10" : "";
+    const filename = `UDAMG_contacts_${type}_${id}${suffix}.${ext}`;
+    try {
+      setBusy(kind);
+      await downloadExport(path, filename, token);
+      setToast("Export téléchargé ✓");
+      setTimeout(() => setToast(""), 2200);
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Export impossible");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -74,30 +96,38 @@ export default function StatsScreen() {
             <Text style={styles.sectionTitle}>Rapports d'export</Text>
             <Pressable
               testID="export-excel"
-              onPress={() => notImpl("L'export Excel")}
-              style={[styles.exportBtn, { backgroundColor: colors.success }]}
+              onPress={() => runExport("xlsx")}
+              disabled={busy !== null}
+              style={[styles.exportBtn, { backgroundColor: colors.success }, busy && { opacity: 0.6 }]}
             >
-              <Text style={styles.exportTxt}>📊 Télécharger le Rapport Excel</Text>
+              {busy === "xlsx" ? <ActivityIndicator color="#FFF" /> : <Text style={styles.exportTxt}>📊 Télécharger le Rapport Excel</Text>}
             </Pressable>
             <Pressable
               testID="export-pdf"
-              onPress={() => notImpl("L'export PDF")}
-              style={[styles.exportBtn, { backgroundColor: colors.error }]}
+              onPress={() => runExport("pdf")}
+              disabled={busy !== null}
+              style={[styles.exportBtn, { backgroundColor: colors.error }, busy && { opacity: 0.6 }]}
             >
-              <Text style={styles.exportTxt}>📄 Télécharger le Rapport PDF</Text>
+              {busy === "pdf" ? <ActivityIndicator color="#FFF" /> : <Text style={styles.exportTxt}>📄 Télécharger le Rapport PDF</Text>}
             </Pressable>
             {isEbed && (
               <Pressable
                 testID="export-pdf-lots"
-                onPress={() => notImpl("L'export PDF par lots de 10")}
-                style={[styles.exportBtn, { backgroundColor: "#7C3AED" }]}
+                onPress={() => runExport("pdf-lots")}
+                disabled={busy !== null}
+                style={[styles.exportBtn, { backgroundColor: "#7C3AED" }, busy && { opacity: 0.6 }]}
               >
-                <Text style={styles.exportTxt}>📚 Télécharger par lots de 10 (PDF)</Text>
+                {busy === "pdf-lots" ? <ActivityIndicator color="#FFF" /> : <Text style={styles.exportTxt}>📚 Télécharger par lots de 10 (PDF)</Text>}
               </Pressable>
             )}
-            <Text style={styles.hint}>Les exports seront disponibles dans une prochaine mise à jour.</Text>
           </View>
         </ScrollView>
+      )}
+
+      {!!toast && (
+        <View style={[styles.toast, { bottom: insets.bottom + spacing.xl }]} testID="stats-toast">
+          <Text style={styles.toastTxt}>{toast}</Text>
+        </View>
       )}
     </View>
   );
@@ -139,5 +169,9 @@ const styles = StyleSheet.create({
   catCount: { color: colors.brandPrimary, fontWeight: "800", fontSize: 16 },
   exportBtn: { padding: spacing.lg, borderRadius: radius.md, alignItems: "center", minHeight: 50, justifyContent: "center" },
   exportTxt: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
-  hint: { color: colors.muted, fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: spacing.xs },
+  toast: {
+    position: "absolute", left: spacing.lg, right: spacing.lg,
+    backgroundColor: colors.surfaceInverse, padding: spacing.md, borderRadius: radius.md,
+  },
+  toastTxt: { color: colors.onSurfaceInverse, textAlign: "center", fontWeight: "700" },
 });

@@ -49,9 +49,9 @@ export default function MenuPrincipal() {
             />
             <View style={styles.cardOverlay}>
               <Text style={styles.cardEyebrow}>PÔLE 1</Text>
-              <Text style={styles.cardTitle}>Évangélisation</Text>
+              <Text style={styles.cardTitle} adjustsFontSizeToFit numberOfLines={1}>Évangélisation</Text>
               <Text style={styles.cardSubtitle}>
-                Villes · Familles spirituelles · Contacts
+                Églises · Programmes · Contacts
               </Text>
             </View>
           </ImageBackground>
@@ -69,7 +69,7 @@ export default function MenuPrincipal() {
             />
             <View style={styles.cardOverlay}>
               <Text style={styles.cardEyebrow}>PÔLE 2</Text>
-              <Text style={styles.cardTitle}>Événements</Text>
+              <Text style={styles.cardTitle} adjustsFontSizeToFit numberOfLines={1}>Événements</Text>
               <Text style={styles.cardSubtitle}>
                 Programmes · Invitations · Coordination
               </Text>

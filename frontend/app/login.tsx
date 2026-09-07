@@ -9,13 +9,14 @@ import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("admin@udamg.app");
   const [password, setPassword] = useState("AdminUdamg2026!");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [gLoading, setGLoading] = useState(false);
 
   const onSubmit = async () => {
     setError("");
@@ -31,6 +32,19 @@ export default function Login() {
       setError(e?.message || "Erreur de connexion");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    setError("");
+    try {
+      setGLoading(true);
+      await loginWithGoogle();
+      router.replace("/(app)/menu");
+    } catch (e: any) {
+      setError(e?.message || "Connexion Google échouée");
+    } finally {
+      setGLoading(false);
     }
   };
 
@@ -95,6 +109,28 @@ export default function Login() {
           )}
         </Pressable>
 
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerTxt}>OU</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Pressable
+          testID="login-google-button"
+          onPress={onGoogle}
+          disabled={gLoading}
+          style={({ pressed }) => [styles.gCta, (pressed || gLoading) && { opacity: 0.85 }]}
+        >
+          {gLoading ? (
+            <ActivityIndicator color={colors.onSurface} />
+          ) : (
+            <>
+              <Text style={styles.gIcon}>G</Text>
+              <Text style={styles.gLabel}>Continuer avec Google</Text>
+            </>
+          )}
+        </Pressable>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Pas encore de compte ? </Text>
           <Link href="/register" testID="login-go-register">
@@ -129,6 +165,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg, minHeight: 54,
   },
   ctaLabel: { color: colors.onBrandPrimary, fontSize: 16, fontWeight: "700" },
+  divider: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginVertical: spacing.md },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerTxt: { color: colors.muted, fontSize: 12, fontWeight: "700" },
+  gCta: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.md,
+    backgroundColor: "#FFFFFF", borderRadius: radius.md, paddingVertical: spacing.lg,
+    borderWidth: 1.5, borderColor: colors.border, minHeight: 54,
+  },
+  gIcon: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: "#4285F4", color: "#FFFFFF",
+    textAlign: "center", lineHeight: 24, fontWeight: "800", fontSize: 14,
+    overflow: "hidden",
+  },
+  gLabel: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
   footerText: { color: colors.muted },
   footerLink: { color: colors.brandPrimary, fontWeight: "600" },

@@ -1,5 +1,6 @@
 """UDAMG APP backend - Evangelization & Church life management."""
 import os
+import io
 import logging
 import unicodedata
 from contextlib import asynccontextmanager
@@ -8,15 +9,24 @@ from pathlib import Path
 from typing import Annotated, List, Optional, Literal
 from uuid import uuid4
 
+import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, APIRouter, HTTPException, status
+from fastapi import Depends, FastAPI, APIRouter, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from motor.motor_asyncio import AsyncIOMotorClient
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 from pwdlib import PasswordHash
 from pydantic import BaseModel, EmailStr, Field
+from reportlab.lib import colors as rl_colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -627,7 +637,257 @@ async def global_stats(user=Depends(current_user)):
         "total_programmes": await db.programmes.count_documents({}),
         "my_contacts": await db.contacts.count_documents({"enregistre_par": user["email"]}),
         "anciens": await db.anciens.count_documents(q_contacts),
+        "transferts": await db.transferts.count_documents({}),
     }
+
+
+# --------------------------------------------------------------------------- #
+# Google Auth (Emergent-managed)
+# --------------------------------------------------------------------------- #
+class SessionExchange(BaseModel):
+    session_id: str
+
+
+@api.post("/auth/session", response_model=TokenResponse)
+async def google_session(data: SessionExchange):
+    """Exchange Emergent session_id → our own JWT. Upserts user by email."""
+    if not data.session_id:
+        raise HTTPException(400, "session_id manquant")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": data.session_id},
+            )
+    except Exception:
+        raise HTTPException(401, "Impossible de vérifier la session Google")
+    if r.status_code != 200:
+        raise HTTPException(401, "Session Google invalide ou expirée")
+    payload = r.json()
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(401, "Email absent de la réponse Google")
+    full_name = (payload.get("name") or "").strip()
+    parts = full_name.split(" ", 1)
+    prenom = parts[0] if parts else "Utilisateur"
+    nom = parts[1] if len(parts) > 1 else ""
+    picture = payload.get("picture")
+
+    existing = await app.state.db.users.find_one({"email": email})
+    if existing:
+        await app.state.db.users.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"google_id": payload.get("id"), "picture": picture, "disabled": False}},
+        )
+        user = await app.state.db.users.find_one({"_id": existing["_id"]})
+    else:
+        user = {
+            "_id": str(uuid4()),
+            "email": email,
+            "nom": nom or "—",
+            "prenom": prenom,
+            "password_hash": password_hash.hash(uuid4().hex),  # unusable local pwd
+            "role": ROLE_EVANGELISTE,
+            "google_id": payload.get("id"),
+            "picture": picture,
+            "disabled": False,
+            "created_at": datetime.now(timezone.utc),
+        }
+        await app.state.db.users.insert_one(user)
+    return TokenResponse(access_token=create_token(user), user=public_user(user))
+
+
+# --------------------------------------------------------------------------- #
+# Transferts (journal)
+# --------------------------------------------------------------------------- #
+@api.get("/transferts")
+async def list_transferts(q: Optional[str] = None, user=Depends(current_user)):
+    query: dict = {}
+    if not can_see_all(user):
+        query["by"] = user["email"]
+    docs = await app.state.db.transferts.find(query).sort("timestamp", -1).to_list(1000)
+    if q:
+        s = strip_accents(q)
+        docs = [d for d in docs if s in strip_accents(
+            f"{d.get('contact_nom','')} {d.get('from',{}).get('nom','')} {d.get('to',{}).get('nom','')} {d.get('by','')}"
+        )]
+    return [{
+        "id": d["_id"],
+        "contact_id": d.get("contact_id"),
+        "contact_nom": d.get("contact_nom", ""),
+        "from": d.get("from", {}),
+        "to": d.get("to", {}),
+        "by": d.get("by", ""),
+        "timestamp": d["timestamp"],
+    } for d in docs]
+
+
+# --------------------------------------------------------------------------- #
+# Rappels (contacts stagnants)
+# --------------------------------------------------------------------------- #
+@api.get("/rappels")
+async def rappels(days: int = 7, user=Depends(current_user)):
+    """Contacts at niveau 1 that haven't been touched for `days` days."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    query: dict = {"niveau": 1, "created_at": {"$lt": cutoff}}
+    if not can_see_all(user):
+        query["enregistre_par"] = user["email"]
+    docs = await app.state.db.contacts.find(query).sort("created_at", 1).to_list(500)
+    return [contact_from_doc(d).model_dump() for d in docs]
+
+
+# --------------------------------------------------------------------------- #
+# Exports (Excel / PDF)
+# --------------------------------------------------------------------------- #
+NIVEAU_LABEL = {1: "Relancé", 2: "Présenté", 3: "Invité", 4: "Disciple"}
+
+
+async def _fetch_contacts(db, context_type: str, context_id: str, user: dict) -> list:
+    query: dict = {}
+    if context_type != "GLOBAL":
+        query["context_type"] = context_type
+        query["context_id"] = context_id
+    if not can_see_all(user):
+        query["enregistre_par"] = user["email"]
+    return await db.contacts.find(query).sort([("categorie", 1), ("nom", 1)]).to_list(5000)
+
+
+@api.get("/exports/contacts.xlsx")
+async def export_xlsx(context_type: str, context_id: str, user=Depends(current_user)):
+    docs = await _fetch_contacts(app.state.db, context_type, context_id, user)
+    wb = Workbook()
+    header_fill = PatternFill("solid", fgColor="0047AB")
+    header_font = Font(bold=True, color="FFFFFF")
+    # Summary sheet
+    ws = wb.active
+    ws.title = "Résumé"
+    ws.append(["UDAMG - Rapport des Contacts"])
+    ws.append([f"Contexte : {context_type} / {context_id}"])
+    ws.append([f"Généré le : {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')}"])
+    ws.append([f"Total : {len(docs)}"])
+    ws.append([])
+    ws.append(["Catégorie", "Nombre"])
+    for cat in CATEGORIES:
+        ws.append([cat, sum(1 for d in docs if d.get("categorie") == cat)])
+    ws.append([])
+    ws.append(["Niveau", "Libellé", "Nombre"])
+    for n in [1, 2, 3, 4]:
+        ws.append([n, NIVEAU_LABEL[n], sum(1 for d in docs if d.get("niveau") == n)])
+    # If GLOBAL, add per-eglise breakdown
+    if context_type == "GLOBAL":
+        ws.append([])
+        ws.append(["Église", "Contacts"])
+        egl: dict = {}
+        for d in docs:
+            key = d.get("context_nom") or d.get("context_id", "?")
+            egl[key] = egl.get(key, 0) + 1
+        for k, v in sorted(egl.items()):
+            ws.append([k, v])
+    # Per-category sheets
+    for cat in CATEGORIES:
+        s = wb.create_sheet(cat[:31])
+        headers = ["Nom", "Prénom", "Téléphone", "Niveau", "Libellé", "Référent", "Date ajout", "Église/Programme", "Notes"]
+        s.append(headers)
+        for i, h in enumerate(headers, 1):
+            cell = s.cell(row=1, column=i)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+        for d in [x for x in docs if x.get("categorie") == cat]:
+            s.append([
+                d.get("nom", ""),
+                d.get("prenom", ""),
+                d.get("tel", "") or "",
+                d.get("niveau", 1),
+                NIVEAU_LABEL.get(d.get("niveau", 1), ""),
+                d.get("referent", ""),
+                d.get("date_ajout", ""),
+                d.get("context_nom", ""),
+                d.get("notes", "") or "",
+            ])
+        # auto column width
+        for col_idx, h in enumerate(headers, 1):
+            s.column_dimensions[s.cell(row=1, column=col_idx).column_letter].width = max(14, len(h) + 2)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"UDAMG_contacts_{context_type}_{context_id}.xlsx"
+    return StreamingResponse(
+        buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _build_pdf(docs: list, title: str, chunk_size: Optional[int] = None, hide_niveau: bool = False) -> bytes:
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=1.2*cm, leftMargin=1.2*cm, topMargin=1.5*cm, bottomMargin=1.5*cm)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph(f"<b>UDAMG</b> — {title}", styles["Title"]))
+    story.append(Paragraph(f"Généré le {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')} · Total : {len(docs)}", styles["Normal"]))
+    story.append(Spacer(1, 0.5*cm))
+
+    if hide_niveau:
+        headers = ["Nom", "Prénom", "Téléphone", "Catégorie", "Référent", "Date"]
+        get_row = lambda d: [d.get("nom", ""), d.get("prenom", ""), d.get("tel", "") or "", d.get("categorie", ""), d.get("referent", ""), d.get("date_ajout", "")]
+    else:
+        headers = ["Nom", "Prénom", "Téléphone", "Cat.", "Niv.", "Référent", "Date"]
+        get_row = lambda d: [d.get("nom", ""), d.get("prenom", ""), d.get("tel", "") or "", d.get("categorie", ""), str(d.get("niveau", 1)), d.get("referent", ""), d.get("date_ajout", "")]
+
+    # sort alphabetically by nom
+    docs_sorted = sorted(docs, key=lambda d: (d.get("nom", ""), d.get("prenom", "")))
+
+    if chunk_size and chunk_size > 0:
+        chunks = [docs_sorted[i:i+chunk_size] for i in range(0, len(docs_sorted), chunk_size)] or [[]]
+    else:
+        chunks = [docs_sorted]
+
+    for idx, chunk in enumerate(chunks):
+        data_rows = [headers] + [get_row(d) for d in chunk]
+        table = Table(data_rows, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#0047AB")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("BACKGROUND", (0, 1), (-1, -1), rl_colors.HexColor("#F8FAFC")),
+            ("GRID", (0, 0), (-1, -1), 0.4, rl_colors.HexColor("#CBD5E1")),
+        ]))
+        if chunk_size:
+            story.append(Paragraph(f"<b>Lot {idx+1} / {len(chunks)}</b> — {len(chunk)} contact(s)", styles["Heading3"]))
+            story.append(Spacer(1, 0.2*cm))
+        story.append(table)
+        if idx < len(chunks) - 1:
+            story.append(PageBreak())
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+@api.get("/exports/contacts.pdf")
+async def export_pdf(context_type: str, context_id: str, user=Depends(current_user)):
+    docs = await _fetch_contacts(app.state.db, context_type, context_id, user)
+    pdf = _build_pdf(docs, f"Contacts — {context_type} / {context_id}")
+    filename = f"UDAMG_contacts_{context_type}_{context_id}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf), media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api.get("/exports/contacts-lots.pdf")
+async def export_pdf_lots(context_type: str, context_id: str, user=Depends(current_user)):
+    """Special EBED report: 10 contacts per page, niveau column hidden."""
+    docs = await _fetch_contacts(app.state.db, context_type, context_id, user)
+    pdf = _build_pdf(docs, "Convention EBED — Rapport par lots de 10", chunk_size=10, hide_niveau=True)
+    filename = f"UDAMG_lots10_{context_type}_{context_id}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf), media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 app.include_router(api)

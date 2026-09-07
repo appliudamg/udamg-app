@@ -1,0 +1,40 @@
+{
+  "summary": "Full-stack validation of 4 new features in Pôle Évangélisation: Excel/PDF exports (openpyxl+reportlab), Journal des transferts (searchable), Google Login (Emergent OAuth), Rappels automatiques (stagnant niveau=1). Backend: 14 new pytest cases at /app/backend/tests/test_udamg_v3.py — all pass. Combined with existing suite: 31/31 backend tests pass. Frontend Playwright end-to-end (390x844 mobile) as admin: login page displays 'Continuer avec Google' button (testID login-google-button); menu Évangélisation card subtitle correctly reads 'Églises · Programmes · Contacts' (old 'Villes · Familles spirituelles · Contacts' gone); Évangélisation submenu shows 2 main cards + 'Outils d'accompagnement' section with evang-rappels-card + evang-transferts-card (admin only visible); Rappels screen loads with 4 chip filters 3/7/14/30 j (rappels-days-{n}) and correctly renders 🎉 empty state 'Aucun rappel en attente / Tous les contacts ont progressé récemment' when no stagnant contacts; Journal transferts screen shows transferts-search bar and 5 existing transfer log entries filtered by 'CCMG' with correct 'DE → VERS' + 'Par admin@udamg.app' + timestamp; Stats screen export-excel button triggered GET /api/exports/contacts.xlsx?context_type=ville&context_id=... → 200 and export-pdf → 200 (real streaming download). Backend validations: XLSX responses start with PK\\x03\\x04 magic, PDF responses start with %PDF- magic, both >500 bytes. RBAC verified on transferts (evang sees only by=own email) and rappels (evang sees only own). /api/auth/session correctly returns 422 for empty body, 422 for empty session_id string, and 401 for a bogus session_id (Emergent OAuth verification failed). All previous CRUD flows still pass. No regressions.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Cosmetic RN-Web warning: 'shadow*' style props deprecated — use boxShadow. Non-blocking, carries over from previous iteration."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_udamg_v3.py",
+    "/app/backend/tests/test_udamg_api.py",
+    "/app/test_reports/pytest/pytest_v3_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Cosmetic, carries over) Migrate remaining shadow* style props to boxShadow to silence RN-Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 893 lines (~630 previously). Still readable but approaching the 700-line split threshold — consider extracting exports (xlsx/pdf/pdf-lots) and auth/session into their own modules.",
+    "Exports use StreamingResponse with proper content-type headers and Content-Disposition inline filenames; RBAC filter via can_see_all + enregistre_par is consistent with list endpoints.",
+    "/api/auth/session correctly delegates to https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data, upserts by email, sets role=evangeliste on first login, and issues our JWT — matches Emergent playbook.",
+    "/api/transferts search uses strip_accents for accent-insensitive matching on contact_nom, from.nom, to.nom, by — good UX. Sort by timestamp desc, limit 1000.",
+    "/api/rappels correctly filters niveau=1 with created_at < now-days and restricts by enregistre_par for evangeliste. Uses contact_from_doc(d).model_dump() so response shape stays consistent with list endpoint.",
+    "MongoDB _id is properly excluded from all new endpoint responses (transferts maps _id → id, rappels goes through contact_from_doc)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_udamg_v3.py",
+    "/app/test_reports/iteration_3.json",
+    "/app/test_reports/pytest/pytest_v3_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "success_rate": {"backend": "100% (31/31, 14 new)", "frontend": "100% (all 7 UI flows in checklist verified)"},
+  "seed_data_creation": "Pytest creates TEST_-prefixed contacts and cleans them up. Playwright run left a handful of TEST_ transferts in the transferts collection (harmless demo journal entries showing 'CCMG Paris → CCMG Angers Par admin@udamg.app').",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL from frontend/.env EXPO_PUBLIC_BACKEND_URL. Reusable pytest at /app/backend/tests/test_udamg_v3.py (14 tests, ~5s) + /app/backend/tests/test_udamg_api.py (17 tests). Credentials in /app/memory/test_credentials.md. New feature testIDs verified: login-google-button, evang-rappels-card, evang-transferts-card (admin only), rappels-back, rappels-days-{3,7,14,30}, rappel-{id}, rappel-wa-{id}, rappel-sms-{id}, transferts-back, transferts-search, transfert-{id}, export-excel, export-pdf, export-pdf-lots. NOTE: Google OAuth full flow requires a real Emergent redirect and can't be end-to-end tested here — only /api/auth/session error paths (400/422/401) validated as instructed."
+}

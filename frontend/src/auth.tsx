@@ -1,7 +1,11 @@
 import * as SecureStore from "expo-secure-store";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { api, AuthResponse, User } from "./api";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = "udamg_auth_token";
 
@@ -26,19 +30,83 @@ type AuthCtx = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, nom: string, prenom: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+const extractSessionId = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const m = url.match(/[?#&]session_id=([^&#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const usedIds = useRef<Set<string>>(new Set());
 
+  const save = async (r: AuthResponse) => {
+    await storage.set(r.access_token);
+    setToken(r.access_token);
+    setUser(r.user);
+  };
+
+  const exchangeSession = async (sid: string) => {
+    if (usedIds.current.has(sid)) return;
+    usedIds.current.add(sid);
+    const r = await api<AuthResponse>("/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sid }),
+    });
+    await save(r);
+  };
+
+  // Mobile: capture deep links
+  const captured = useRef<string | null>(null);
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      captured.current = url;
+      const sid = extractSessionId(url);
+      if (sid) exchangeSession(sid).catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Initial mount: check web URL for session_id first, else stored token
   useEffect(() => {
     (async () => {
       try {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          const sid = extractSessionId(window.location.hash) || extractSessionId(window.location.search);
+          if (sid) {
+            try {
+              await exchangeSession(sid);
+              // Clean URL
+              try {
+                const url = new URL(window.location.href);
+                url.hash = "";
+                url.searchParams.delete("session_id");
+                window.history.replaceState(window.history.state, "", url.toString());
+              } catch {}
+              setLoading(false);
+              return;
+            } catch {}
+          }
+        } else {
+          const initial = await Linking.getInitialURL();
+          const sid = extractSessionId(initial);
+          if (sid) {
+            try {
+              await exchangeSession(sid);
+              setLoading(false);
+              return;
+            } catch {}
+          }
+        }
         const saved = await storage.get();
         if (saved) {
           try {
@@ -54,12 +122,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
-
-  const save = async (r: AuthResponse) => {
-    await storage.set(r.access_token);
-    setToken(r.access_token);
-    setUser(r.user);
-  };
 
   const login = async (email: string, password: string) => {
     const r = await api<AuthResponse>("/auth/login", {
@@ -77,6 +139,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await save(r);
   };
 
+  const loginWithGoogle = async () => {
+    const redirectUrl = Platform.OS === "web"
+      ? (typeof window !== "undefined" ? window.location.origin + "/" : "")
+      : Linking.createURL("");
+    const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    if (Platform.OS === "web") {
+      window.location.href = authUrl;
+      return;
+    }
+    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+    // Try result.url first, then captured deep link, then initial URL
+    let url: string | null = null;
+    // @ts-ignore  - type differs by platform
+    if (result?.type === "success" && result.url) url = result.url;
+    if (!url) url = captured.current;
+    if (!url) url = await Linking.getInitialURL();
+    const sid = extractSessionId(url);
+    if (!sid) throw new Error("Connexion Google annulée");
+    await exchangeSession(sid);
+  };
+
   const logout = async () => {
     await storage.remove();
     setToken(null);
@@ -84,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, token, loading, login, register, logout }}>
+    <Ctx.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout }}>
       {children}
     </Ctx.Provider>
   );
