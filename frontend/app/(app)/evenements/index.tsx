@@ -152,6 +152,21 @@ export default function EvenementsList() {
           contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: insets.bottom + spacing.xl, gap: spacing.md }}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.brandPrimary} />}
           ListEmptyComponent={<Text style={styles.empty}>Aucun événement à venir</Text>}
+          ListHeaderComponent={
+            canCreate ? (
+              <Pressable
+                testID="evenements-create-cta"
+                onPress={() => setCreateOpen(true)}
+                style={({ pressed }) => [styles.createCta, pressed && { opacity: 0.9 }]}
+              >
+                <View style={styles.createIcon}><Text style={styles.createIconTxt}>+</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.createTitle}>Créer un nouveau programme</Text>
+                  <Text style={styles.createSub}>Culte spécial, veillée, sortie d'évangélisation…</Text>
+                </View>
+              </Pressable>
+            ) : null
+          }
           renderItem={({ item }) => {
             const d = new Date(item.date);
             const isPasteur = user?.role === "pasteur";
@@ -242,6 +257,16 @@ export default function EvenementsList() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {canCreate && (
+        <Pressable
+          testID="evenements-fab"
+          onPress={() => setCreateOpen(true)}
+          style={[styles.fab, { bottom: insets.bottom + spacing.lg }]}
+        >
+          <Text style={styles.fabTxt}>+</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -262,6 +287,25 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   cardBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, alignItems: "center", minHeight: 40, justifyContent: "center" },
   cardBtnTxt: { fontWeight: "700", fontSize: 12 },
+  createCta: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    backgroundColor: colors.brandPrimary, padding: spacing.lg,
+    borderRadius: radius.lg, marginBottom: spacing.md, minHeight: 72,
+    shadowColor: colors.brandPrimary, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+  },
+  createIcon: {
+    width: 44, height: 44, borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center",
+  },
+  createIconTxt: { color: "#FFFFFF", fontSize: 26, fontWeight: "300", marginTop: -3 },
+  createTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  createSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 2 },
+  fab: {
+    position: "absolute", right: spacing.xl, width: 60, height: 60, borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center",
+    shadowColor: colors.brandPrimary, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 10,
+  },
+  fabTxt: { color: colors.onBrandPrimary, fontSize: 34, fontWeight: "300", marginTop: -4 },
   datePill: { width: 62, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.brandPrimary, alignItems: "center" },
   dateDay: { color: colors.onBrandPrimary, fontSize: 22, fontWeight: "800" },
   dateMonth: { color: colors.onBrandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1 },
