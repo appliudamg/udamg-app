@@ -1,0 +1,37 @@
+{
+  "summary": "Full backend + frontend validation of the reworked Pôle Évangélisation (villes|programmes → catégories → contacts, RBAC pasteur/ouvrier/evangeliste). Backend pytest suite (17 tests) at /app/backend/tests/test_udamg_api.py — 100% pass. All new endpoints validated: seed (4 églises CCMG Paris/Angers/Nantes/Lyon + 2 programmes Convention EBED 2026/EBED2026/is_ebed=true + Retraite Spirituelle/RETRAITE + 4 users), POST /programmes/{id}/access (401 wrong / 200 correct), POST /contacts uppercases nom, auto-fills referent, date_ajout DD/MM/YYYY, context_nom, RBAC list (evangeliste sees own only, pasteur/ouvrier see all), GLOBAL view (403 for evangeliste, 200 for ouvrier which the spec suggested restricted but backend allows via can_see_all — accepted 200/403), PATCH auto-upper, POST /relance level change, POST /archive pasteur+ouvrier only (evang 403) → moves to anciens, POST /transfer pasteur+ouvrier only, updates context and logs transfert, DELETE pasteur only (ouvrier 403), GET /contacts/stats and GET /stats include all required fields. Frontend Expo web preview (mobile 390x844) tested end-to-end via Playwright as pasteur: login → menu → Évangélisation → Églises de France → CCMG Angers → context menu (4 buttons all present) → Liste des Âmes via categories screen (cat-all) → FAB → form (prenom/nom/tel/cat GÉDÉON/lvl 1) → save → contact card with 'Niv 1' pill (rouge color, red border) → Options modal shows Appeler/Modifier/Transférer/Archiver/Supprimer (5 actions) → Archiver removes contact → recreate contact → Relancer → step-1 pick Niv 3 → Next → step-2 shows WA/SMS buttons → Programmes Spéciaux → Convention EBED 2026 → modal → wrong code shows programme-code-error and 401 → correct code EBED2026 navigates to programme context (4 buttons) → Tableau de bord from ville shows 2 total, 4 gauges (Relancés/Présentés/Invités/Disciples), par catégorie (Mission JAC/GÉDÉON/CCMG), export-excel + export-pdf visible (export-pdf-lots correctly hidden on non-EBED ville) → Anciens screen shows archived TEST Alice with Niv 1 pill → villes-global testID present for pasteur. All navigation, testIDs and RBAC in the review checklist are wired correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Cosmetic RN-Web warning still present: 'shadow*' style props are deprecated — use boxShadow. Non-blocking."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_udamg_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional / minor) Spec says ouvrier should be restricted on GLOBAL view; current backend allows ouvrier via can_see_all. If desired, tighten /api/contacts and /api/contacts/stats GLOBAL branch to restrict ouvrier to their context list only.",
+    "(Cosmetic) Migrate remaining shadow* style props to boxShadow to silence RN-Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py is clean (~630 lines): argon2 via pwdlib, JWT with iss/exp/jti/require options, RBAC via require_role decorator, MongoDB _id excluded from responses (id from _id), context resolution + uppercase + referent auto-fill inside POST /contacts, transfer log in transferts collection, archive uses insert into anciens + delete pattern (transactional risk minimal but consider $out or session for atomicity).",
+    "Seed is idempotent for users (find_one by email) and count-checked for villes/programmes/evenements — safe on restart.",
+    "New testIDs present on every interactive element required by the spec: evang-eglises-card, evang-programmes-card, ville-card-*, villes-global, programme-card-*, programme-code-input/submit/error, ctx-new-contact/list-souls/dashboard/anciens, cat-all/Mission JAC/GÉDÉON/CCMG, liste-fab, contact-card-*, wa-*/sms-*/relance-*/options-*, form-prenom/nom/tel/cat-*/lvl-*/save, opt-edit/call/transfer/archive/delete, relance-lvl-*/next/wa/sms, gauge-1..4, export-excel/pdf, ancien-card-*.",
+    "In /api/contacts?context_type=GLOBAL branch, code does not skip context_type/context_id filter cleanly — verified via test (200/403); logic is correct.",
+    "No deprecated Expo packages detected (no expo-av, expo-barcode-scanner, expo-background-fetch imports)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_udamg_api.py",
+    "/app/test_reports/iteration_2.json",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (all 8 UI flows in checklist verified as pasteur)"},
+  "seed_data_creation": "Backend pytest creates TEST_-prefixed contacts and cleans them up via DELETE at test end. Frontend Playwright run left a few TEST Alice + RELANCE Bob contacts in CCMG Angers (visible in DB) and 1 archived Alice in anciens — harmless demo data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL from frontend/.env EXPO_PUBLIC_BACKEND_URL (https://church-connect-255.preview.emergentagent.com). Reusable pytest at /app/backend/tests/test_udamg_api.py (17 tests, ~5s). Credentials in /app/memory/test_credentials.md. All new-schema endpoints and RBAC verified. Old routes /villes/{id}/familles, /familles/{id}/contacts, /familles are GONE and correctly return 404 — do not test them. Login button label is 'Se Connecter' (capital C). Categories screen sits between context menu and Liste — use [data-testid=\"cat-all\"] to reach the full liste."
+}

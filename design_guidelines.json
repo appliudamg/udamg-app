@@ -1,0 +1,226 @@
+{
+  "app_name": "UDAMG APP",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "Pure white minimalist focus with sharp royal blue accents, keeping the mission front and center without visual noise.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#111827",
+    "surfaceSecondary": "#F8FAFC",
+    "onSurfaceSecondary": "#334155",
+    "surfaceTertiary": "#F1F5F9",
+    "onSurfaceTertiary": "#475569",
+    "surfaceInverse": "#0F172A",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#0047AB",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#0047AB",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#3B82F6",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#EFF6FF",
+    "onBrandTertiary": "#1D4ED8",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#E2E8F0",
+    "borderStrong": "#CBD5E1",
+    "divider": "#F1F5F9",
+    "muted": "#64748B"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous padding around content. Use iOS-native spacing rhythms. Empty space is intentional. Touch targets ≥ 44x44pt.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "stack_only",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use for floating action buttons (FAB), sticky headers over scrollable lists, and bottom sheet headers.",
+      "Apply to the background of bottom tabs if used, or sticky bottom primary CTAs."
+    ],
+    "dont's": [
+      "Do not use on regular cards, list rows, or standard buttons.",
+      "Do not over-blur; ensure pure white 'zéro distraction' feel is maintained."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "SplashScreen",
+      "purpose": "A welcoming entry introducing the app's mission and slogan.",
+      "states": {
+        "loading": "Centered white spinner over the minimalist church background.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-bleed background image of a minimalist cross/church. Apply a dark gradient scrim (top to bottom). The text 'UDAMG APP' and the slogan 'Sauvé par Grâce pour Sauver' should be placed cleanly in the center-bottom, using `onSurfaceInverse`."
+    },
+    {
+      "name": "LoginPage",
+      "purpose": "Secure authentication for church members and administrators.",
+      "states": {
+        "loading": "Button shows loading spinner upon submission.",
+        "empty": "N/A",
+        "error": "Standard error toast or inline text under inputs."
+      },
+      "layout": "Pure white background. Large, accessible input fields (Email, Password) with labels above inputs. Sticky primary CTA 'Se Connecter' in royal blue pinned to the bottom above safe area."
+    },
+    {
+      "name": "MenuPrincipal",
+      "purpose": "The central Hub to direct users to either Evangelism or Events.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Split-screen landing menu. Two massive stacked cards taking equal vertical space in the center. Card 1: 'POLE 1 - Évangélisation' with a subtle tinted icon or background image. Card 2: 'POLE 2 - Événements'. Both should have pure white or very light gray backgrounds, sharp blue accents, and large hit areas. Minimalist header 'Menu Principal' at the top."
+    },
+    {
+      "name": "PageVilles",
+      "purpose": "Select a city to filter evangelism cells.",
+      "states": {
+        "loading": "Centered spinner.",
+        "empty": "Illustration with 'Aucune ville trouvée'.",
+        "error": "Message 'Erreur de chargement' with retry button."
+      },
+      "layout": "Sticky search bar at the top with glass effect. A clean list of cities using full-width rows (surfaceSecondary or surface), with a right-aligned royal blue chevron."
+    },
+    {
+      "name": "PageFamilles",
+      "purpose": "List spiritual families/cells (e.g., Gédéon, Moins de 18 ans) for the selected city.",
+      "states": {
+        "loading": "Centered spinner.",
+        "empty": "Illustration with 'Aucune famille spirituelle'.",
+        "error": "Message with retry button."
+      },
+      "layout": "Header shows selected Ville. Minimalist cards for each family. Each card displays the family name, meeting time/location, and a group icon. Card margins should be generous (lg padding)."
+    },
+    {
+      "name": "ContactListPage",
+      "purpose": "A minimalist, alphabetized directory of contacts for follow-up.",
+      "states": {
+        "loading": "Skeleton list rows.",
+        "empty": "Illustration: 'Aucun contact enregistré'.",
+        "error": "Retry button."
+      },
+      "layout": "Top search bar. Content is an alphabetized list (A, B, C section headers in muted text). Each row has an initials avatar (brandTertiary bg with royal blue text), Nom, Prénom, and smaller subtitle for 'famille reference'. A floating action button (FAB) in royal blue sits bottom-right for 'Ajouter un contact'."
+    },
+    {
+      "name": "FormulaireContact",
+      "purpose": "Quick-add contact bottom sheet triggered from ContactListPage.",
+      "states": {
+        "loading": "Spinner on submit button.",
+        "empty": "N/A",
+        "error": "Inline error styling on fields."
+      },
+      "layout": "Bottom sheet modal using `@gorhom/bottom-sheet`. Minimalist handle. Single-column form: Nom, Prénom, Téléphone, Famille (dropdown/select). Sticky primary button 'Enregistrer' at the bottom of the sheet."
+    },
+    {
+      "name": "EventsList",
+      "purpose": "Calendar and list of upcoming church events.",
+      "states": {
+        "loading": "Skeleton cards.",
+        "empty": "Illustration: 'Aucun événement à venir'.",
+        "error": "Retry button."
+      },
+      "layout": "Horizontal scrollable date strip or monthly grid calendar at the top. Below, vertically scrollable event cards showing date, heure, lieu, thématique, and type (sorties, veillées, cultes spéciaux). Cards use generous white space, subtle shadow 1, and royal blue accents for dates or 'Inviter' CTAs."
+    },
+    {
+      "name": "EventDetail",
+      "purpose": "Detailed view of an event with participant tracking and roles.",
+      "states": {
+        "loading": "Centered spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Hero image at the top (church or worship gathering) overlaid with a dark vertical gradient scrim and event title. Below: details section (lieu, intervenants), a dashboard block tracking participants, and role assignments. Floating sticky button at bottom to 'S'inscrire' or manage."
+    },
+    {
+      "name": "InviteElders",
+      "purpose": "Special mobilization module to invite specific church members (anciens).",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "Illustration 'Aucun membre à inviter'.",
+        "error": "Retry button."
+      },
+      "layout": "A specialized contact selection list with checkboxes. A 'Spécial ✨' badge in royal blue/gold. Top summary shows 'X sélectionnés'. Sticky bottom button 'Envoyer l'invitation'."
+    },
+    {
+      "name": "Profile",
+      "purpose": "User dashboard, stats, and settings.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Large initials avatar centered at the top. A block of user stats (contacts added, events attended). A simple vertical list of settings options and a 'Se déconnecter' button in error red."
+    }
+  ],
+  "images": {
+    "splash_bg": {
+      "url": "https://images.unsplash.com/photo-1515162305285-0293e4767cc2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwY2h1cmNoJTIwY3Jvc3MlMjBsaWdodHxlbnwwfHx8fDE3ODg2NTEwMTh8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "A minimalist white church roof with a cross against a clear blue sky"
+    },
+    "event_hero_worship": {
+      "url": "https://images.unsplash.com/photo-1570786032462-2efc3ca8fccd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjaHVyY2glMjB3b3JzaGlwJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85",
+      "alt": "A crowd of people with arms raised in worship"
+    },
+    "hub_evangelism_cover": {
+      "url": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjb21tdW5pdHklMjBncm91cCUyMG1lZXRpbmclMjBmcmllbmRzfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Community group of friends meeting outdoors"
+    },
+    "hub_events_cover": {
+      "url": "https://images.unsplash.com/photo-1762967019514-232e7fc815a1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHxtaW5pbWFsaXN0JTIwY2h1cmNoJTIwY3Jvc3MlMjBsaWdodHxlbnwwfHx8fDE3ODg2NTEwMTh8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern church interior architecture"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Adhere strictly to the requested 'Fond blanc pur minimaliste' (pure white backgrounds #FFFFFF) paired with 'bleu roi' (Royal Blue #0047AB) for interactive and accent elements. This is a deliberate override of the default blue ban.",
+    "For the Hub screen (MenuPrincipal), divide the screen into two large, equal-sized touch targets for the two poles. This reduces decision friction and emphasizes the app's dual-mission focus.",
+    "Implement the ContactListPage as an alphabetized directory. Ensure there is generous white space and the primary action to add a contact is housed in a Floating Action Button (FAB).",
+    "The FormulaireContact must be a Bottom Sheet modal (@gorhom/bottom-sheet). Ensure the background of the sheet respects the pure white minimal aesthetics with a clean drag handle.",
+    "Any text overlaid on imagery (e.g., SplashScreen, EventDetail hero) MUST feature a vertical gradient scrim (transparent to dark) and text positioned in the bottom 30% for WCAG compliance.",
+    "Use French terminology across the UI exactly as requested: 'Menu Principal', 'Évangélisation', 'Événements', 'Ajouter un contact', 'Inviter les anciens', 'Sauvé par Grâce pour Sauver'."
+  ]
+}
