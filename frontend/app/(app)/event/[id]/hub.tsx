@@ -53,9 +53,28 @@ export default function EventHub() {
             </View>
           </View>
           {!activeSession && (
-            <Text style={styles.sessionHint}>Le Pasteur doit ouvrir une séance pour débloquer le pointage.</Text>
+            <Text style={styles.sessionHint}>
+              {isPastoral ? "Ouvrez une séance ci-dessous pour débloquer le pointage." : "Le Pasteur doit ouvrir une séance pour débloquer le pointage."}
+            </Text>
           )}
         </View>
+
+        {/* Big Open Session CTA when no active session and user is pastoral */}
+        {!activeSession && isPastoral && (
+          <Pressable
+            testID="hub-open-session"
+            onPress={() => router.push(`/(app)/event/${id}/pasteur?titre=${encodeURIComponent(titre || "")}&openStart=1`)}
+            style={({ pressed }) => [styles.ctaSession, pressed && { opacity: 0.9 }]}
+          >
+            <View style={[styles.primaryIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+              <Text style={styles.primaryIconTxt}>▶</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.primaryLbl}>Ouvrir une séance</Text>
+              <Text style={styles.ctaSessionSub}>Débloquer le scanner de pointage maintenant</Text>
+            </View>
+          </Pressable>
+        )}
 
         {/* Quick KPI */}
         {isLoading ? (
@@ -175,6 +194,13 @@ const styles = StyleSheet.create({
   primaryIcon: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
   primaryIconTxt: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
   primaryLbl: { color: "#FFFFFF", fontSize: 17, fontWeight: "800", flex: 1 },
+  ctaSession: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    padding: spacing.lg, borderRadius: radius.lg, minHeight: 72,
+    backgroundColor: colors.success,
+    shadowColor: colors.success, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+  },
+  ctaSessionSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 2 },
   outlineBtn: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,
     padding: spacing.lg, borderRadius: radius.lg, minHeight: 68,

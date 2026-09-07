@@ -1,0 +1,28 @@
+{
+  "summary": "Retest of iteration 6 HIGH-priority bug (Alert.alert with buttons silently dropped on react-native-web). Fix (window.confirm on web, Alert.alert on native) VERIFIED WORKING. All 5 requested checks pass: (1) accept-confirm fires DELETE 204 and removes card, (2) dismiss-confirm fires NO DELETE and card stays, (3) ouvrier sees 0 delete buttons but 3 share buttons, (4) DB clean (3 events remain, no Iter6/TEST_ leftovers), (5) Hub CTA smoke — hub-open-session renders on events w/o active session and opens Pasteur with auto-open modal. Deprecated shadow* / pointerEvents style warnings still present in console (non-blocking, unrelated to this fix).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Present on multiple screens (menu, evenements). Non-blocking but should be migrated. Ref: multiple StyleSheet files"},
+      {"component": "props.pointerEvents", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking. Ref: multiple screens"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_7.json"],
+  "action_items": [
+    "Optional (non-blocking): migrate remaining shadow* style props to boxShadow and props.pointerEvents to style.pointerEvents to silence RN 0.75+ deprecation warnings"
+  ],
+  "critical_code_review_comments": [
+    "confirmDelete() branch on Platform.OS === 'web' correctly uses window.confirm with typeof window !== 'undefined' guard — safe for SSR. Native path retains Alert.alert with destructive style.",
+    "DELETE mutation triggers query invalidation on success; UI updates within ~1s of 204 response."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only retest)", "frontend": "100% (5/5 checks pass)"},
+  "seed_data_creation": "None. Test 2 consumed 1 seeded event ('Culte spécial - Anciens') via legitimate delete flow — 3 events remain, all clean. Spec permitted '4 or fewer'. Main agent may re-seed if backend restart doesn't restore it automatically.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Delete-confirm on evenements list is stable on web. For future Playwright tests involving window.confirm: DO NOT rely on page.on('dialog', ...) because click() promise hangs 30s. Instead override window.confirm via page.evaluate BEFORE the click: `await page.evaluate(() => { window.__confirmCalls=[]; window.confirm = (m)=>{ window.__confirmCalls.push(m); return true; }; })` then click and inspect __confirmCalls afterwards. This gives deterministic control and no timeouts.",
+  "rca_of_issue": "Iteration 6 bug RCA (already fixed): react-native-web silently drops the buttons argument of Alert.alert, so the destructive 'Supprimer' callback was never invoked. Iteration 7 fix uses window.confirm on Platform.OS === 'web' which returns synchronously true/false, wired to deleteMut.mutate. Confirmed via captured confirm message 'Supprimer « Culte spécial - Anciens » ?' + DELETE /api/evenements/{id} → 204 → card removed."
+}

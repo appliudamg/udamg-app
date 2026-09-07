@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator,
   Modal, TextInput, ScrollView,
@@ -19,13 +19,18 @@ export default function Pasteur() {
   const { token, user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
-  const { id, titre } = useLocalSearchParams<{ id: string; titre?: string }>();
+  const { id, titre } = useLocalSearchParams<{ id: string; titre?: string; openStart?: string }>();
+  const openStart = (useLocalSearchParams() as any).openStart;
 
   const [startOpen, setStartOpen] = useState(false);
   const [sessionName, setSessionName] = useState("");
   const [busyPdf, setBusyPdf] = useState(false);
   const [purgeOpen, setPurgeOpen] = useState<string | null>(null);
   const [purgeText, setPurgeText] = useState("");
+
+  useEffect(() => {
+    if (openStart === "1") setStartOpen(true);
+  }, [openStart]);
 
   const { data: dash } = useQuery({
     queryKey: ["event-dashboard", id],

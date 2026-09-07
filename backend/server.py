@@ -335,6 +335,16 @@ async def _seed(db):
             {"_id": str(uuid4()), "titre": "Réunion des jeunes", "description": "Rencontre mensuelle", "date": now + timedelta(days=10), "lieu": "Salle Jeunesse", "ville": "Angers", "type_evenement": "reunion_jeunes", "intervenants": ["Sœur Claire"], "image_url": None, "created_by": admin["_id"], "created_at": now},
         ])
 
+    # Cleanup TEST_ events (from automated tests)
+    test_events = await db.evenements.find({"titre": {"$regex": "^TEST_"}}).to_list(500)
+    for te in test_events:
+        eid = te["_id"]
+        await db.event_participants.delete_many({"evenement_id": eid})
+        await db.event_sessions.delete_many({"evenement_id": eid})
+        await db.event_pointages.delete_many({"evenement_id": eid})
+        await db.event_enfants.delete_many({"evenement_id": eid})
+        await db.evenements.delete_one({"_id": eid})
+
 
 # --------------------------------------------------------------------------- #
 # Routes
@@ -601,6 +611,22 @@ async def create_evt(data: EvenementCreate, user=Depends(require_role(ROLE_PASTE
     doc = {"_id": str(uuid4()), **data.model_dump(), "created_by": user["_id"], "created_at": now}
     await app.state.db.evenements.insert_one(doc)
     return event_from_doc(doc)
+
+
+@api.delete("/evenements/{eid}", status_code=204)
+async def delete_evenement(eid: str, _=Depends(require_role(ROLE_PASTEUR))):
+    db = app.state.db
+    exists = await db.evenements.find_one({"_id": eid})
+    if not exists:
+        raise HTTPException(404, "Événement introuvable")
+    # Cascade cleanup of all event-related collections
+    await db.event_participants.delete_many({"evenement_id": eid})
+    await db.event_sessions.delete_many({"evenement_id": eid})
+    await db.event_pointages.delete_many({"evenement_id": eid})
+    await db.event_enfants.delete_many({"evenement_id": eid})
+    await db.invitations.delete_many({"evenement_id": eid})
+    await db.evenements.delete_one({"_id": eid})
+    return None
 
 
 @api.get("/users", response_model=List[PublicUser])

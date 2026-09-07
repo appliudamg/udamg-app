@@ -1,8 +1,9 @@
 import { useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, RefreshControl,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Alert, Share,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -64,6 +65,50 @@ export default function EvenementsList() {
     onError: (e: any) => toast.show(e?.message || "Erreur création", "error"),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: (eid: string) => api(`/evenements/${eid}`, { method: "DELETE" }, token),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["evenements"] });
+      toast.show("Événement supprimé", "success");
+    },
+    onError: (e: any) => toast.show(e?.message || "Erreur suppression", "error"),
+  });
+
+  const shareLink = async (evt: Evenement) => {
+    const base = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+    const url = `${base}/inscription?event=${evt.id}&titre=${encodeURIComponent(evt.titre)}`;
+    try {
+      if (Platform.OS === "web") {
+        await Clipboard.setStringAsync(url);
+        toast.show("Lien copié ✓", "success");
+      } else {
+        await Share.share({ message: `Inscription ${evt.titre} : ${url}`, url });
+      }
+    } catch {
+      await Clipboard.setStringAsync(url);
+      toast.show("Lien copié ✓", "success");
+    }
+  };
+
+  const confirmDelete = (evt: Evenement) => {
+    const doDelete = () => deleteMut.mutate(evt.id);
+    if (Platform.OS === "web") {
+      // Alert.alert with buttons is unreliable on react-native-web — use native confirm
+      if (typeof window !== "undefined" && window.confirm(`Supprimer « ${evt.titre} » ?\n\nToutes les inscriptions, séances et pointages associés seront supprimés définitivement.`)) {
+        doDelete();
+      }
+      return;
+    }
+    Alert.alert(
+      "Supprimer cet événement ?",
+      `« ${evt.titre} » — toutes les inscriptions, séances et pointages associés seront supprimés définitivement.`,
+      [
+        { text: "Annuler", style: "cancel" },
+        { text: "Supprimer", style: "destructive", onPress: doDelete },
+      ],
+    );
+  };
+
   const submit = () => {
     if (!f.titre || !f.lieu || !f.date) {
       toast.show("Titre, lieu et date requis", "error");
@@ -88,7 +133,7 @@ export default function EvenementsList() {
         </View>
         {canCreate && (
           <Pressable testID="evenements-create" onPress={() => setCreateOpen(true)} style={styles.newBtn}>
-            <Text style={styles.newTxt}>+</Text>
+            <Text style={styles.newTxt}>+ Nouveau</Text>
           </Pressable>
         )}
       </View>
@@ -109,24 +154,44 @@ export default function EvenementsList() {
           ListEmptyComponent={<Text style={styles.empty}>Aucun événement à venir</Text>}
           renderItem={({ item }) => {
             const d = new Date(item.date);
+            const isPasteur = user?.role === "pasteur";
             return (
-              <Pressable
-                testID={`evenement-card-${item.id}`}
-                onPress={() => router.push(`/(app)/event/${item.id}/hub?titre=${encodeURIComponent(item.titre)}`)}
-                style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
-              >
-                <View style={styles.datePill}>
-                  <Text style={styles.dateDay}>{d.getDate().toString().padStart(2, "0")}</Text>
-                  <Text style={styles.dateMonth}>{d.toLocaleDateString("fr-FR", { month: "short" }).toUpperCase()}</Text>
+              <View style={styles.card} testID={`evenement-card-${item.id}`}>
+                <Pressable
+                  onPress={() => router.push(`/(app)/event/${item.id}/hub?titre=${encodeURIComponent(item.titre)}`)}
+                  style={({ pressed }) => [styles.cardMain, pressed && { opacity: 0.9 }]}
+                >
+                  <View style={styles.datePill}>
+                    <Text style={styles.dateDay}>{d.getDate().toString().padStart(2, "0")}</Text>
+                    <Text style={styles.dateMonth}>{d.toLocaleDateString("fr-FR", { month: "short" }).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.typeTag}>{eventTypeLabel(item.type_evenement)}</Text>
+                    <Text style={styles.cardTitle} numberOfLines={2}>{item.titre}</Text>
+                    <Text style={styles.cardMeta}>📍 {item.lieu}{item.ville ? ` · ${item.ville}` : ""}</Text>
+                    <Text style={styles.cardMeta}>🕐 {formatDate(item.date)}</Text>
+                    <Text style={styles.openHub}>Ouvrir le système d'émargement →</Text>
+                  </View>
+                </Pressable>
+                <View style={styles.cardActions}>
+                  <Pressable
+                    testID={`evt-share-${item.id}`}
+                    onPress={() => shareLink(item)}
+                    style={[styles.cardBtn, { backgroundColor: colors.brandTertiary }]}
+                  >
+                    <Text style={[styles.cardBtnTxt, { color: colors.brandPrimary }]}>🔗 Lien d'inscription</Text>
+                  </Pressable>
+                  {isPasteur && (
+                    <Pressable
+                      testID={`evt-delete-${item.id}`}
+                      onPress={() => confirmDelete(item)}
+                      style={[styles.cardBtn, { backgroundColor: "#FEE2E2" }]}
+                    >
+                      <Text style={[styles.cardBtnTxt, { color: colors.error }]}>🗑 Supprimer</Text>
+                    </Pressable>
+                  )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.typeTag}>{eventTypeLabel(item.type_evenement)}</Text>
-                  <Text style={styles.cardTitle} numberOfLines={2}>{item.titre}</Text>
-                  <Text style={styles.cardMeta}>📍 {item.lieu}{item.ville ? ` · ${item.ville}` : ""}</Text>
-                  <Text style={styles.cardMeta}>🕐 {formatDate(item.date)}</Text>
-                  <Text style={styles.openHub}>Ouvrir le système d'émargement →</Text>
-                </View>
-              </Pressable>
+              </View>
             );
           }}
         />
@@ -188,12 +253,15 @@ const styles = StyleSheet.create({
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 26, fontWeight: "800", color: colors.onSurface },
-  newBtn: { width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  newTxt: { color: colors.onBrandPrimary, fontSize: 24, fontWeight: "300", marginTop: -3 },
+  newBtn: { paddingHorizontal: spacing.md, height: 36, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  newTxt: { color: colors.onBrandPrimary, fontSize: 13, fontWeight: "800" },
   card: {
-    flexDirection: "row", gap: spacing.md, alignItems: "flex-start",
-    backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg,
+    backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden",
   },
+  cardMain: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start", padding: spacing.lg },
+  cardActions: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  cardBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, alignItems: "center", minHeight: 40, justifyContent: "center" },
+  cardBtnTxt: { fontWeight: "700", fontSize: 12 },
   datePill: { width: 62, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.brandPrimary, alignItems: "center" },
   dateDay: { color: colors.onBrandPrimary, fontSize: 22, fontWeight: "800" },
   dateMonth: { color: colors.onBrandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1 },

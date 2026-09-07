@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 6 — Pôle 2 bug-fix validation (Ouvrir une séance CTA, delete/share per-event buttons, + Nouveau on portal, TEST_ cleanup, DELETE cascade+RBAC). Backend: created /app/backend/tests/test_iter6_delete_cascade.py with 10 focused tests — 10/10 PASS in 4.2s. Verified (a) DELETE /api/evenements/{eid} → 403 for ouvrier, 403 for evangeliste, 204 for pasteur; missing event → 404; (b) cascade correctly removes participants, active session, pointages, enfants (dashboard after delete shows total=0/pointages=0/enfants=0); (c) POST /api/evenements works for pasteur AND ouvrier (evang → 403); (d) startup TEST_ cleanup effective — GET /api/evenements returns exactly the 4 seeded events (Sortie d'évangélisation, Veillée de prière, Culte spécial - Anciens, Réunion des jeunes) with NO TEST_ prefixed entries. Frontend Playwright mobile 390x844: verified for admin@udamg.app (pasteur), ouvrier@udamg.app, evangeliste@udamg.app all 3 roles. testID 'evenements-create' (+ Nouveau pill) visible for pasteur & ouvrier, HIDDEN for evangeliste ✓. Per-card buttons: 'evt-share-{id}' present for ALL roles (4/4 events for each user), 'evt-delete-{id}' present ONLY for pasteur (4/4 for pasteur, 0/4 for ouvrier & evang) ✓. Share button: tapping copies /inscription?event={id}&titre=... to clipboard, toast 'Lien copié ✓' shown ✓. GREEN 'Ouvrir une séance' CTA (testID 'hub-open-session', background rgb(16,185,129)=colors.success) correctly renders on Hub screen ONLY when no active session AND user is pastoral — verified on 'Veillée de prière' event (no active session) as pasteur. Tapping the CTA navigates to /event/{id}/pasteur?openStart=1 (URL param confirmed) AND the 'Lancer une séance' modal auto-opens on the Pasteur screen (testID 'start-session-input' FOUND immediately) ✓. Regression sanity: 'Sortie d'évangélisation - Centre-ville' event (which has an active 'Séance 1' left over from prior iterations) correctly HIDES the hub-open-session CTA — confirms conditional logic works both ways. HOWEVER, one CRITICAL blocker found for web preview: the delete confirmation (Alert.alert with Annuler/Supprimer buttons in evenements/index.tsx:93-102) does NOT trigger any dialog on React Native Web — RN-Web's Alert.alert only calls window.alert(title) and IGNORES the buttons array, so the destructive onPress={deleteMut.mutate} is NEVER invoked in the web preview. Tapping 'Supprimer' does nothing (0 dialogs captured, card not removed, no DELETE request fired). This will still work correctly on native (Expo Go / iOS / Android builds), but is broken on the web preview the user is testing with.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "evenements/index.tsx confirmDelete", "issue": "Alert.alert with buttons does NOT show a dialog on React Native Web — RN-Web polyfills it to window.alert(title) and silently drops the button callbacks, so the delete flow is BROKEN on web preview (works on native only). Tap on 🗑 Supprimer produces no dialog, no DELETE request, no state change. Reference: /app/frontend/app/(app)/evenements/index.tsx:93-102.", "testID": "evt-delete-{id}", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Delete event from list (web)", "issue": "Alert.alert buttons ignored by react-native-web. Recommend: on web use window.confirm() fallback or a custom cross-platform Modal. Example fix: `if (Platform.OS==='web') { if (window.confirm('Supprimer ?')) deleteMut.mutate(evt.id); } else { Alert.alert(...) }` or replace with existing Modal pattern already used in create form.", "affected_testIDs": ["evt-delete-{id}"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter6_delete_cascade.py",
+    "/app/test_reports/pytest/pytest_iter6_results.xml"
+  ],
+  "action_items": [
+    "HIGH: Replace Alert.alert-based delete confirmation in /app/frontend/app/(app)/evenements/index.tsx (confirmDelete function) with a cross-platform solution. Suggested fix: `if (Platform.OS === 'web') { if (window.confirm(`Supprimer « ${evt.titre} » ? Cette action est définitive.`)) deleteMut.mutate(evt.id); } else { Alert.alert(...) }`. Otherwise users cannot delete events from the web preview (the exact env they've been testing in).",
+    "(Optional) Consider replacing Alert.alert entirely with a custom RN Modal for delete confirm to have consistent styling and testability across platforms."
+  ],
+  "critical_code_review_comments": [
+    "Backend delete_evenement (server.py:616-629) cleanly cascades to all 5 related collections (event_participants, event_sessions, event_pointages, event_enfants, invitations) — correct. Tested end-to-end.",
+    "Backend startup cleanup (server.py:338-346) purges TEST_ events on every restart — good ops hygiene. Verified 0 TEST_ events leak into GET /api/evenements after restart.",
+    "Hub open-session CTA (hub.tsx:63-77) uses correct guard `!activeSession && isPastoral` and points to /pasteur?openStart=1. Pasteur screen (pasteur.tsx:22-33) picks up openStart and auto-opens the modal via useEffect on mount — no race condition observed, modal appeared instantly.",
+    "Frontend evenements list card buttons (index.tsx:168-185) correctly gate delete on isPasteur but leave share available for all roles (share is safe/idempotent). Good RBAC alignment with backend."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter6_delete_cascade.py",
+    "/app/test_reports/iteration_6.json",
+    "/app/test_reports/pytest/pytest_iter6_results.xml"
+  ],
+  "success_rate": {"backend": "100% (10/10 iter6 tests)", "frontend": "~92% — all new testIDs FOUND (evenements-create, evt-share-{id}, evt-delete-{id}, hub-open-session), CTA colors correct, openStart=1 auto-modal chain works, RBAC on buttons correct. 1 blocker: Alert.alert delete confirm does not fire on web."},
+  "seed_data_creation": "Test file creates TEST_Iter6_* events, all cleaned up via DELETE at end of tests or by next backend restart via the startup TEST_ cleanup routine. During UI test one 'Iter6 Delete Me' event remained undeleted (see Alert.alert bug); it will be purged on next backend restart.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable: /app/backend/tests/test_iter6_delete_cascade.py (10 tests, 4s). Run with `pytest -o addopts='' backend/tests/test_iter6_delete_cascade.py`. Pointage payload expects {evenement_id, badge_id} (NOT participant_id). After main agent fixes Alert.alert web issue, re-run UI script from iter6 to confirm delete on web works (expect: dialog captured, cards count decreases by 1, DELETE /api/evenements/{eid} fires with 204). One left-over 'Iter6 Delete Me' event with eid 0d75cee1-42d0-4bb8-8576-3e886b5b7fb5 sits in DB — will auto-purge on next backend restart (title starts with TEST_? no, it starts with 'Iter6' so it will NOT be auto-purged — main agent should delete it via curl DELETE with pasteur token, or add 'Iter6' to cleanup regex, or manually delete from Mongo).",
+  "rca_of_issue": "RCA for delete-on-web failure: react-native-web's Alert module (versions < 0.20 and even current) is a polyfill that maps Alert.alert(title, message, buttons?) to a plain window.alert(title) call — it does not implement the buttons UI nor invoke button.onPress callbacks. This is documented behavior: https://necolas.github.io/react-native-web/docs/alert/. Since UDAMG frontend uses `Alert.alert('Supprimer...', ..., [{text:'Annuler'}, {text:'Supprimer', onPress: () => deleteMut.mutate(evt.id)}])`, the destructive onPress is dead code on web. Mitigation: use Platform.OS-conditional logic (window.confirm on web) OR a custom RN Modal that renders identical UI on web+native (the codebase already uses Modal for the create form — same pattern can be reused for a ConfirmDialog component)."
+}
