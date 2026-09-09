@@ -12,7 +12,7 @@ import { useAuth } from "@/src/auth";
 import { api, MediaItem, mediaCoverUrl } from "@/src/api";
 import { mediaTheme, categoryHue, initialsOf } from "@/src/media_theme";
 
-type FormPick = { uri: string; name: string; mimeType?: string | null; size?: number | null };
+type FormPick = { uri: string; name: string; mimeType?: string | null; size?: number | null; file?: File | null };
 
 export default function MediaAdmin() {
   const router = useRouter();
@@ -46,8 +46,14 @@ export default function MediaAdmin() {
   const pickAudio = async () => {
     const res = await DocumentPicker.getDocumentAsync({ type: ["audio/*", "video/*"], multiple: false, copyToCacheDirectory: true });
     if (!res.canceled && res.assets?.[0]) {
-      const a = res.assets[0];
-      setAudio({ uri: a.uri, name: a.name || `audio.${(a.mimeType || "mp3").split("/")[1]}`, mimeType: a.mimeType, size: a.size });
+      const a: any = res.assets[0];
+      setAudio({
+        uri: a.uri,
+        name: a.name || `audio.${(a.mimeType || "mp3").split("/")[1]}`,
+        mimeType: a.mimeType,
+        size: a.size,
+        file: a.file ?? null, // web: File object from the browser picker
+      });
     }
   };
 
@@ -57,8 +63,14 @@ export default function MediaAdmin() {
       quality: 0.85,
     });
     if (!res.canceled && res.assets?.[0]) {
-      const a = res.assets[0];
-      setCover({ uri: a.uri, name: a.fileName || "cover.jpg", mimeType: a.mimeType, size: a.fileSize });
+      const a: any = res.assets[0];
+      setCover({
+        uri: a.uri,
+        name: a.fileName || "cover.jpg",
+        mimeType: a.mimeType,
+        size: a.fileSize,
+        file: a.file ?? null,
+      });
     }
   };
 
@@ -82,20 +94,42 @@ export default function MediaAdmin() {
 
     if (audio) {
       if (Platform.OS === "web") {
-        try {
-          const blob = await (await fetch(audio.uri)).blob();
-          form.append("audio", blob, audio.name);
-        } catch { toast("Impossible de lire le fichier audio"); return; }
+        // On web, prefer the File object directly (avoids blob URL fetch issues)
+        if (audio.file && typeof (audio.file as any).name === "string") {
+          form.append("audio", audio.file, audio.file.name || audio.name);
+        } else {
+          try {
+            const resp = await fetch(audio.uri);
+            const blob = await resp.blob();
+            if (!blob.size) throw new Error("Fichier audio vide");
+            // Wrap in a File to guarantee filename + content-type
+            const f = new File([blob], audio.name, { type: audio.mimeType || blob.type || "audio/mpeg" });
+            form.append("audio", f, audio.name);
+          } catch (e) {
+            toast(`Impossible de lire le fichier audio: ${(e as Error).message}`);
+            return;
+          }
+        }
       } else {
         form.append("audio", { uri: audio.uri, name: audio.name, type: audio.mimeType || "audio/mpeg" } as any);
       }
     }
     if (cover) {
       if (Platform.OS === "web") {
-        try {
-          const blob = await (await fetch(cover.uri)).blob();
-          form.append("cover", blob, cover.name);
-        } catch { toast("Impossible de lire la pochette"); return; }
+        if (cover.file && typeof (cover.file as any).name === "string") {
+          form.append("cover", cover.file, cover.file.name || cover.name);
+        } else {
+          try {
+            const resp = await fetch(cover.uri);
+            const blob = await resp.blob();
+            if (!blob.size) throw new Error("Pochette vide");
+            const f = new File([blob], cover.name, { type: cover.mimeType || blob.type || "image/jpeg" });
+            form.append("cover", f, cover.name);
+          } catch (e) {
+            toast(`Impossible de lire la pochette: ${(e as Error).message}`);
+            return;
+          }
+        }
       } else {
         form.append("cover", { uri: cover.uri, name: cover.name, type: cover.mimeType || "image/jpeg" } as any);
       }
