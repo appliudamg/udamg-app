@@ -96,3 +96,35 @@ Codes programmes évangélisation : `EBED2026`, `RETRAITE`. Google Login via Eme
 - Suppression physique (hard delete) pour Anciens (204).
 - Stats hebdomadaires (`by_week` sur 8 dernières semaines ISO) + exports Excel/PDF corrigés (magic bytes validés).
 
+
+## Pôle 3 — Médias & Enseignements
+Streaming premium (thème sombre or/rouge/violet) inspiré de DS Audio + ImpactX.
+
+### Écrans
+- `/(app)/media` — Accueil : bannières, "Continuer l'écoute", raccourcis, sections par catégorie
+- `/(app)/media/discover` — recherche + filtres kind (audio/vidéo/podcast/livre) + catégories
+- `/(app)/media/library` — Playlists (CRUD) + Favoris
+- `/(app)/media/playlist/[id]` — Détail playlist, playAll, add/remove
+- `/(app)/media/admin` — Console upload (pasteur + ouvrier) : titre, orateur, catégorie, type, description, transcription, audio, pochette
+- **PlayerModal** plein écran : pochette / script, ±10 s, prev/next, vitesse (0.75/1/1.25/1.5/2×), sleep timer (15/30/60 min ou fin du morceau), toggle favoris
+- **MiniPlayer** flottant : progress bar or, toggle, tap = ouvrir le player, remonte au-dessus du bottom nav
+
+### Backend (routes `/api/media*` + `/api/playlists*`)
+- CRUD médias (POST/PATCH pasteur+ouvrier, DELETE pasteur)
+- Stream `/api/media/{id}/file` (Bearer + `?token=` pour le web)
+- Cover `/api/media/{id}/cover`
+- Favoris (add/del/list)
+- Playlists (CRUD + add/remove item)
+- Progress (save + list + "continue listening")
+- 8 médias seedés (pochette placeholder + description ; pas d'audio jusqu'à upload admin)
+
+### Modèle Firestore-like (MongoDB)
+- `media_items` — id, title, author, category, kind, audio_path, cover_path, duration, description, transcript, created_at, created_by
+- `playlists` — user_id, title, item_ids[], updated_at
+- `favorites` — (user_id, media_id) unique
+- `user_progress` — (user_id, media_id) unique + last_position_seconds, completed
+
+### Stockage
+Emergent Managed Object Storage — path convention `udamg/media/{id}/audio.{ext}` + `cover.{ext}`.
+La lecture en arrière-plan / verrouillage écran est activée (audio mode) mais nécessite un **build natif** pour tests réels (pas Expo Go).
+

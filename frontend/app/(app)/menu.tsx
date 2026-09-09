@@ -7,6 +7,7 @@ import { colors, spacing, radius } from "@/src/theme";
 
 const EVANG_IMG = "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjb21tdW5pdHklMjBncm91cCUyMG1lZXRpbmclMjBmcmllbmRzfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
 const EVENTS_IMG = "https://images.unsplash.com/photo-1570786032462-2efc3ca8fccd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjaHVyY2glMjB3b3JzaGlwJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
+const MEDIA_IMG = "https://images.unsplash.com/photo-1478147427282-58a87a120781?crop=entropy&cs=srgb&fm=jpg&w=1200&q=80";
 
 export default function MenuPrincipal() {
   const insets = useSafeAreaInsets();
@@ -72,6 +73,26 @@ export default function MenuPrincipal() {
               <Text style={styles.cardTitle} adjustsFontSizeToFit numberOfLines={1}>Événements</Text>
               <Text style={styles.cardSubtitle}>
                 Programmes · Invitations · Coordination
+              </Text>
+            </View>
+          </ImageBackground>
+        </Pressable>
+
+        <Pressable
+          testID="menu-medias-card"
+          onPress={() => router.push("/(app)/media")}
+          style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+        >
+          <ImageBackground source={{ uri: MEDIA_IMG }} style={styles.cardBg} imageStyle={styles.cardImage}>
+            <LinearGradient
+              colors={["rgba(139,0,0,0.55)", "rgba(76,29,149,0.9)"]}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={styles.cardOverlay}>
+              <Text style={[styles.cardEyebrow, { color: "#FCD34D" }]}>PÔLE 3</Text>
+              <Text style={styles.cardTitle} adjustsFontSizeToFit numberOfLines={1}>Médias & Enseignements</Text>
+              <Text style={styles.cardSubtitle}>
+                Prédications · Podcasts · Worship · Livres audio
               </Text>
             </View>
           </ImageBackground>

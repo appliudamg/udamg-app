@@ -45,6 +45,56 @@ export type ContactStats = {
   by_categorie: Record<string, number>;
 };
 
+// Pôle 3 — Médias & Enseignements
+export type MediaKind = "audio" | "video" | "podcast" | "livre";
+export type MediaCategory = string;
+
+export type MediaItem = {
+  id: string;
+  title: string;
+  author: string;
+  category: MediaCategory;
+  kind: MediaKind;
+  audio_path?: string | null;
+  cover_path?: string | null;
+  duration?: number | null;
+  description?: string | null;
+  transcript?: string | null;
+  created_at: string;
+  created_by?: string | null;
+};
+
+export type Playlist = {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string | null;
+  item_ids: string[];
+  updated_at: string;
+};
+
+export type MediaProgress = {
+  media_id: string;
+  last_position_seconds: number;
+  completed: boolean;
+  updated_at: string;
+};
+
+export const mediaFileUrl = (id: string, token: string): string =>
+  `${BASE}/api/media/${id}/file?token=${encodeURIComponent(token)}`;
+
+export const mediaCoverUrl = (id: string): string =>
+  `${BASE}/api/media/${id}/cover`;
+
+export const fmtDuration = (secs?: number | null): string => {
+  if (!secs || secs < 1) return "--:--";
+  const s = Math.floor(secs % 60).toString().padStart(2, "0");
+  const m = Math.floor((secs / 60) % 60);
+  const h = Math.floor(secs / 3600);
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s}`;
+  return `${m}:${s}`;
+};
+
 export async function api<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     ...options,

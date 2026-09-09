@@ -221,7 +221,16 @@ async def lifespan(app: FastAPI):
     await db.event_pointages.create_index([("evenement_id", 1), ("participant_id", 1), ("session_id", 1)], unique=True)
     await db.event_pointages.create_index("timestamp")
     await db.event_enfants.create_index([("evenement_id", 1), ("session_id", 1)])
+    # Pôle 3 — media indexes
+    await db.media_items.create_index([("category", 1), ("created_at", -1)])
+    await db.media_items.create_index([("title", "text"), ("author", "text"), ("description", "text")])
+    await db.playlists.create_index([("user_id", 1), ("updated_at", -1)])
+    await db.favorites.create_index([("user_id", 1), ("media_id", 1)], unique=True)
+    await db.user_progress.create_index([("user_id", 1), ("media_id", 1)], unique=True)
     await _seed(db)
+    from media import seed_media, init_storage_async
+    await seed_media(db)
+    await init_storage_async()
     yield
     client.close()
 
@@ -1006,7 +1015,15 @@ async def export_pdf_lots(context_type: str, context_id: str, user=Depends(curre
     )
 
 
+# Pôle 3 — Médias & Enseignements: register BEFORE include_router
+from media import register_media as _register_media
+_register_media(app, api, current_user, require_role, {
+    "pasteur": ROLE_PASTEUR, "ouvrier": ROLE_OUVRIER, "evangeliste": ROLE_EVANGELISTE,
+})
+
 app.include_router(api)
+
+# (media routes registered above)
 
 
 # =========================================================================== #
