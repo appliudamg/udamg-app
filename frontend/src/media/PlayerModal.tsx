@@ -6,14 +6,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer, SleepTimerMode } from "@/src/player";
 import { mediaTheme, initialsOf, categoryHue, kindLabel } from "@/src/media_theme";
-import { mediaCoverUrl, fmtDuration } from "@/src/api";
+import { mediaCoverUrl, mediaFileUrl, fmtDuration } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { LinearGradient } from "expo-linear-gradient";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 const RATES = [0.75, 1, 1.25, 1.5, 2];
 
 export function PlayerModal() {
   const insets = useSafeAreaInsets();
   const p = usePlayer();
+  const { token } = useAuth();
   const [tab, setTab] = useState<"cover" | "script">("cover");
   const [showSleep, setShowSleep] = useState(false);
 
@@ -24,6 +27,7 @@ export function PlayerModal() {
   const hue = categoryHue[item.category] || mediaTheme.violetDeep;
   const isFav = p.isFavorite(item.id);
   const pct = p.durationSec > 0 ? p.positionSec / p.durationSec : 0;
+  const isVideo = item.kind === "video" && !!item.audio_path && !!token;
 
   return (
     <Modal
@@ -33,6 +37,9 @@ export function PlayerModal() {
       onRequestClose={p.closePlayer}
       statusBarTranslucent
     >
+      {isVideo ? (
+        <VideoScreen url={mediaFileUrl(item.id, token!)} item={item} onClose={p.closePlayer} isFav={isFav} onFav={() => p.toggleFavorite(item.id).catch(() => {})} />
+      ) : (
       <View style={styles.root}>
         <LinearGradient
           colors={[hue, mediaTheme.bg]}
@@ -143,9 +150,70 @@ export function PlayerModal() {
           onPick={(m) => { p.setSleepTimer(m); setShowSleep(false); }}
         />
       </View>
+      )}
     </Modal>
   );
 }
+
+// ---- Video screen (used when kind=video) ---- //
+function VideoScreen({
+  url, item, onClose, isFav, onFav,
+}: {
+  url: string;
+  item: any;
+  onClose: () => void;
+  isFav: boolean;
+  onFav: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const player = useVideoPlayer(url, (p) => {
+    p.play();
+  });
+
+  return (
+    <View style={videoStyles.root}>
+      <View style={[videoStyles.header, { paddingTop: insets.top + 8 }]}>
+        <Pressable testID="video-close" onPress={onClose} hitSlop={12} style={videoStyles.iconBtn}>
+          <Text style={videoStyles.icon}>⌄</Text>
+        </Pressable>
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={videoStyles.eyebrow}>VIDÉO</Text>
+          <Text style={videoStyles.title} numberOfLines={1}>{item.title}</Text>
+        </View>
+        <Pressable testID="video-fav" onPress={onFav} hitSlop={12} style={videoStyles.iconBtn}>
+          <Text style={[videoStyles.icon, isFav && { color: mediaTheme.ruby }]}>{isFav ? "♥" : "♡"}</Text>
+        </Pressable>
+      </View>
+      <VideoView
+        style={videoStyles.player}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+        contentFit="contain"
+        nativeControls
+      />
+      <View style={videoStyles.meta}>
+        <Text style={videoStyles.metaTitle}>{item.title}</Text>
+        <Text style={videoStyles.metaAuthor}>{item.author}</Text>
+        {!!item.description && <Text style={videoStyles.metaDesc}>{item.description}</Text>}
+      </View>
+    </View>
+  );
+}
+
+const videoStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: "#000" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  icon: { color: "#FFF", fontSize: 28 },
+  eyebrow: { color: mediaTheme.gold, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  title: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+  player: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" },
+  meta: { padding: 20, gap: 6 },
+  metaTitle: { color: "#FFF", fontSize: 20, fontWeight: "800" },
+  metaAuthor: { color: mediaTheme.gold, fontSize: 13 },
+  metaDesc: { color: mediaTheme.textMuted, fontSize: 13, lineHeight: 20, marginTop: 8 },
+});
 
 // ---- Progress bar (tap to seek) ---- //
 function ProgressBar({ pct, onScrub }: { pct: number; onScrub: (f: number) => void }) {

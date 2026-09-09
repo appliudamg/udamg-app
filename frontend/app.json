@@ -50,11 +50,18 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Choisir des pochettes pour les médias",
+          "photosPermission": "Choisir des pochettes et vidéos pour les médias",
           "cameraPermission": "Autoriser UDAMG à utiliser la caméra pour scanner les badges QR"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

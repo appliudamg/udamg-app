@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 13 — Video upload/streaming + dynamic admin labels + PlayerModal video branch validated. Backend: 8/8 pytest tests pass in 2.79s covering (1) POST /api/media/create-json kind='video' → 201, (2) POST /api/media/{id}/upload kind='audio' + MP4 (video/mp4) → 200 with audio_path='udamg/media/{id}/audio.mp4' and kind stays 'video', (3) GET /api/media/{id}/file Range: bytes=0-1 → 206, Content-Range 'bytes 0-1/2048', Content-Length 2, Content-Type starts with 'video/', Accept-Ranges bytes, (4) full stream w/o Range → 200 with video/*, (5) middle slice Range → 206 with correct Content-Length, (6) évangéliste create-json kind=video → 403 RBAC, (7) iter 12 audio Range regression → 206, (8) iter 11 audio create-json + upload regression → 200. Frontend (Expo web preview @390x844): admin console dynamic labels verified — kind=audio → label 'Fichier audio' + button '📁 Sélectionner un fichier audio (.mp3, .aac, .wav, .m4a, .flac)'; tap 'admin-kind-video' chip → label switches to 'Fichier vidéo' + button '🎬 Sélectionner une vidéo (.mp4, .mov, .m4v, .webm)'; tap 'admin-kind-audio' → reverts to audio labels. No 'Cannot access next before initialization' red screen on /media or /media/admin. PlayerModal video branch confirmed: tapping a kind='video' item (created via API with audio_path set) opens the VideoScreen with testIDs 'video-close' + 'video-fav' + eyebrow 'VIDÉO', no crash (HTML5 <video> logs 'Failed to load because no supported source was found' because the fake MP4 is only a ftyp header — expected). PlayerModal audio regression: tapping a kind='audio' item still opens the classic audio player with testIDs player-close/player-toggle/player-rate/player-sleep. All TEST_ITER13_* items cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter13_video_upload.py",
+    "/app/test_reports/pytest/pytest_iter13.xml"
+  ],
+  "action_items": [
+    "None. All 6 fixes described in the review request are validated end-to-end (backend + web-preview UI). The user can now retest video upload on iPhone via Expo Go.",
+    "Non-blocking observation: /app/frontend/app/(app)/media/admin.tsx passes parameters:{kind:'audio'} to /upload even for videos (line 188). This is intentional and matches the backend contract — the backend accepts 'audio' as the destination field for any media file, and it computes the extension from the filename ('audio.mp4'). Keep as-is."
+  ],
+  "critical_code_review_comments": [
+    "admin.tsx pickMedia() correctly branches on isVideoKind: on native, uses ImagePicker.launchImageLibraryAsync({mediaTypes:['videos']}) for videos and DocumentPicker (audio/*, video/*) for audio; on web, falls back to DocumentPicker with video/* accept. Fallback MIME video/mp4 applied when kind=video and picker doesn't return one.",
+    "admin.tsx admin-kind-video onPress resets `audio` state to null (line 300), correctly discarding a previously picked audio file — verified in UI: after picking would-be file, switching kind clears the '— filename' suffix.",
+    "PlayerModal.tsx correctly branches to <VideoScreen> when item.kind === 'video' && item.audio_path && token (line 30). VideoScreen uses expo-video's useVideoPlayer + <VideoView allowsFullscreen allowsPictureInPicture nativeControls contentFit='contain'>. On web preview this maps to a plain HTML5 <video> — hence 'no supported source' error is expected for our fake MP4, but the screen renders without crashing.",
+    "player.tsx nextRef pattern (line 59 + line 231 useEffect assignment) correctly avoids the TDZ 'Cannot access next before initialization' error that would come from a circular useCallback dependency between play() and next(). Validated: no red screen appears on /media or /media/admin.",
+    "player.tsx play() (line 151-156) short-circuits when item.kind === 'video' — no AudioPlayer is created, playback is delegated to <VideoView>. Correct.",
+    "backend/media.py upload_media_file (line 337-372) accepts ANY content-type file (no validation on `file.content_type`), computes ext from filename ('audio.mp4' when file is 'clip.mp4'), stores at `udamg/media/{mid}/audio.mp4`, and updates only audio_path — kind field is untouched, preserved from create-json. Matches spec.",
+    "backend/media.py stream endpoint returns the stored file's original content-type from Emergent Object Storage → for our MP4 upload the response Content-Type starts with 'video/' as expected by iOS AVPlayer / expo-video."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter13_video_upload.py (new)",
+    "/app/test_reports/pytest/pytest_iter13.xml (new)",
+    "/app/test_reports/iteration_13.json (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8)",
+    "frontend": "100% (7/7 UI checks: no red screen /media, no red screen /media/admin, default audio label, switch to video label, switch back to audio label, video PlayerModal branch, audio PlayerModal regression)"
+  },
+  "seed_data_creation": "No persistent seed data left. Backend fixtures create TEST_ITER13_Video (2048-byte fake MP4) and TEST_ITER13_Audio (8044-byte silent WAV) then delete them at teardown. UI test created TEST_ITER13_VideoUI which was deleted after the run. Verified: 0 TEST_ items remaining in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Video upload E2E validated at HTTP + web-preview UI level. On real iPhone via Expo Go, the video picker (ImagePicker mediaTypes=['videos']) and the VideoView playback should work — that must be verified manually since expo-video native playback cannot run in Playwright/web. Reuse /app/backend/tests/test_iter13_video_upload.py for regressions. Fake MP4 fixture is only 2048 bytes with a bare ftyp box, sufficient for HTTP-layer testing but NOT playable — for playback smoke tests, upload a real short MP4 file. Note: MP4 files preserve the ISO base media file 'ftyp' magic in the first 8 bytes ('ftypisom' at offset 4).",
+  "rca_of_issue": "Original bug: 'kind=video' in the admin console could only pick audio files, and the PlayerModal always rendered the audio interface. RCA: (1) admin.tsx pickMedia() unconditionally used DocumentPicker with type='audio/*'; (2) PlayerModal.tsx had no branching on item.kind === 'video'; (3) player.tsx had a TDZ from a circular useCallback dependency in the play() → next() → play() chain when the audio SDK's didJustFinish event fired. Fix applied by main agent: (a) pickMedia() switches to ImagePicker.launchImageLibraryAsync({mediaTypes:['videos']}) on native for videos, else DocumentPicker with 'video/*' accept; dynamic labels driven by isVideoKind; state reset on kind change; (b) PlayerModal renders <VideoScreen> using expo-video useVideoPlayer/VideoView for kind='video'; (c) nextRef.current is populated by a useEffect that watches `next`, breaking the circular deps. All 3 fixes verified: backend accepts MP4 uploads (200), stores at audio.mp4, streams with Content-Type video/*, Range 206; frontend labels & pickers switch correctly; PlayerModal opens VideoScreen for video items and audio player for audio items; no red-screen JS error on /media or /media/admin."
+}

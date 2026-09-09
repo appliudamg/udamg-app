@@ -56,6 +56,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
   const playerRef = useRef<AudioPlayer | null>(null);
   const savedAtRef = useRef<number>(0);
+  const nextRef = useRef<() => void>(() => {});
 
   const [current, setCurrent] = useState<MediaItem | null>(null);
   const [queue, setQueue] = useState<MediaItem[]>([]);
@@ -147,17 +148,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if (item.kind === "video") {
+      // Video playback is delegated to <VideoView> inside PlayerModal.
+      // We only track "current" here so mini-player and modal see the item.
+      setIsPlaying(false);
+      return;
+    }
+
     const url = mediaFileUrl(item.id, token);
     try {
       const p = createAudioPlayer({ uri: url }, { updateInterval: 500 });
       playerRef.current = p;
-      // Track ID to guard against stale event handlers from previously disposed players.
-      const trackId = item.id;
       p.playbackRate = playbackRate;
       // Reliable end-of-track detection via the SDK's own event
       p.addListener?.("playbackStatusUpdate", (status: any) => {
-        // Guard against events from a disposed player (user switched track).
-        if (!playerRef.current || (current && current.id !== trackId && trackId !== item.id)) return;
+        // Ignore events from a disposed player (user switched track).
+        if (!playerRef.current) return;
         if (typeof status?.currentTime === "number") setPositionSec(status.currentTime);
         if (typeof status?.duration === "number" && status.duration > 0) {
           setDurationSec((prev) => (Math.abs(prev - status.duration) > 0.1 ? status.duration : prev));
@@ -174,7 +180,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             setSleepTimerState(null);
             setSleepRemainingSec(null);
           } else {
-            next();
+            nextRef.current();
           }
         }
       });
@@ -184,7 +190,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       console.warn("audio player init failed", e);
       setIsPlaying(false);
     }
-  }, [playbackRate, token, current, next, saveProgress, sleepTimer]);
+  }, [playbackRate, token, saveProgress, sleepTimer]);
 
   const toggle = useCallback(() => {
     const p = playerRef.current;
@@ -219,6 +225,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const n = queue[currentIndex + 1];
     if (n) play(n, queue).catch(() => {});
   }, [currentIndex, play, queue]);
+
+  // Keep a ref to `next` so the audio player listener can call it
+  // without creating a circular useCallback dependency (TDZ error).
+  useEffect(() => { nextRef.current = next; }, [next]);
 
   const prev = useCallback(() => {
     if (positionSec > 3) { seek(0); return; }

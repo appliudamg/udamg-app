@@ -44,16 +44,53 @@ export default function MediaAdmin() {
   const [cover, setCover] = useState<FormPick | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const pickAudio = async () => {
-    const res = await DocumentPicker.getDocumentAsync({ type: ["audio/*", "video/*"], multiple: false, copyToCacheDirectory: true });
+  const isVideoKind = kind === "video";
+  const audioExts = ".mp3, .aac, .wav, .m4a, .flac";
+  const videoExts = ".mp4, .mov, .m4v, .webm";
+
+  const pickMedia = async () => {
+    // When kind=video → prefer the OS media library (Photos on iOS), else use the
+    // document picker (which handles audio-only files from Files app / cloud).
+    if (isVideoKind && Platform.OS !== "web") {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        toast("Autorisation photos requise pour choisir une vidéo");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"] as any,
+        allowsEditing: false,
+        quality: 1,
+      });
+      if (!res.canceled && res.assets?.[0]) {
+        const a: any = res.assets[0];
+        setAudio({
+          uri: a.uri,
+          name: a.fileName || `video.${(a.mimeType || "video/mp4").split("/")[1] || "mp4"}`,
+          mimeType: a.mimeType || "video/mp4",
+          size: a.fileSize,
+          file: a.file ?? null,
+        });
+      }
+      return;
+    }
+    // Audio / podcast / livre / (web video) → DocumentPicker
+    const accept = isVideoKind ? ["video/*"] : ["audio/*", "video/*"];
+    const res = await DocumentPicker.getDocumentAsync({
+      type: accept,
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
     if (!res.canceled && res.assets?.[0]) {
       const a: any = res.assets[0];
+      const fallbackExt = isVideoKind ? "mp4" : "mp3";
+      const fallbackMime = isVideoKind ? "video/mp4" : "audio/mpeg";
       setAudio({
         uri: a.uri,
-        name: a.name || `audio.${(a.mimeType || "mp3").split("/")[1]}`,
-        mimeType: a.mimeType,
+        name: a.name || `media.${(a.mimeType || fallbackMime).split("/")[1] || fallbackExt}`,
+        mimeType: a.mimeType || fallbackMime,
         size: a.size,
-        file: a.file ?? null, // web: File object from the browser picker
+        file: a.file ?? null,
       });
     }
   };
@@ -141,17 +178,18 @@ export default function MediaAdmin() {
           }),
         }, token);
 
-        // 2) upload audio (if any) via FileSystem.uploadAsync
+        // 2) upload audio/video (if any) via FileSystem.uploadAsync
         if (audio) {
+          const defaultMime = isVideoKind ? "video/mp4" : "audio/mpeg";
           const r = await FileSystem.uploadAsync(`${BASE}/api/media/${created.id}/upload`, audio.uri, {
             httpMethod: "POST",
             uploadType: FileSystem.FileSystemUploadType.MULTIPART,
             fieldName: "file",
             parameters: { kind: "audio" },
-            mimeType: audio.mimeType || "audio/mpeg",
+            mimeType: audio.mimeType || defaultMime,
             headers: { Authorization: `Bearer ${token}` },
           });
-          if (r.status >= 400) throw new Error(`Audio: ${r.body?.slice(0, 200) || `HTTP ${r.status}`}`);
+          if (r.status >= 400) throw new Error(`Fichier: ${r.body?.slice(0, 200) || `HTTP ${r.status}`}`);
         }
 
         // 3) upload cover (if any)
@@ -252,8 +290,17 @@ export default function MediaAdmin() {
           <Field label="Type">
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
               {(cats.data?.kinds ?? ["audio"]).map((k) => (
-                <Pressable key={k} testID={`admin-kind-${k}`} onPress={() => setKind(k)}
-                  style={[styles.chip, kind === k && styles.chipOn]}>
+                <Pressable
+                  key={k}
+                  testID={`admin-kind-${k}`}
+                  onPress={() => {
+                    setKind(k);
+                    // Reset the picked file when switching kind — audio picker
+                    // and video picker return incompatible URIs on iOS.
+                    setAudio(null);
+                  }}
+                  style={[styles.chip, kind === k && styles.chipOn]}
+                >
                   <Text style={[styles.chipTxt, kind === k && { color: "#000" }]}>{k}</Text>
                 </Pressable>
               ))}
@@ -272,9 +319,15 @@ export default function MediaAdmin() {
               placeholderTextColor={mediaTheme.textDim} multiline style={[styles.input, { minHeight: 100 }]} />
           </Field>
 
-          <Field label={`Fichier audio${audio ? ` — ${audio.name}` : ""}`}>
-            <Pressable testID="admin-pick-audio" onPress={pickAudio} style={styles.filePick}>
-              <Text style={styles.filePickTxt}>{audio ? "🔁 Remplacer le fichier" : "📁 Sélectionner un fichier audio (MP3/AAC/MP4)"}</Text>
+          <Field label={`${isVideoKind ? "Fichier vidéo" : "Fichier audio"}${audio ? ` — ${audio.name}` : ""}`}>
+            <Pressable testID="admin-pick-audio" onPress={pickMedia} style={styles.filePick}>
+              <Text style={styles.filePickTxt}>
+                {audio
+                  ? "🔁 Remplacer le fichier"
+                  : isVideoKind
+                    ? `🎬 Sélectionner une vidéo (${videoExts})`
+                    : `📁 Sélectionner un fichier audio (${audioExts})`}
+              </Text>
             </Pressable>
           </Field>
 
