@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "@/src/auth";
 import { api, MediaItem, mediaCoverUrl } from "@/src/api";
 import { mediaTheme, categoryHue, initialsOf } from "@/src/media_theme";
@@ -84,67 +85,89 @@ export default function MediaAdmin() {
     if (!title.trim() || !author.trim()) {
       toast("Titre et orateur requis"); return;
     }
-    const form = new FormData();
-    form.append("title", title.trim());
-    form.append("author", author.trim());
-    form.append("category", category);
-    form.append("kind", kind);
-    if (description.trim()) form.append("description", description.trim());
-    if (transcript.trim()) form.append("transcript", transcript.trim());
 
-    if (audio) {
+    setUploading(true);
+    try {
+      const BASE = process.env.EXPO_PUBLIC_BACKEND_URL!;
+
       if (Platform.OS === "web") {
-        // On web, prefer the File object directly (avoids blob URL fetch issues)
-        if (audio.file && typeof (audio.file as any).name === "string") {
-          form.append("audio", audio.file, audio.file.name || audio.name);
-        } else {
-          try {
+        // --- WEB path: multipart with FormData + File objects ---
+        const form = new FormData();
+        form.append("title", title.trim());
+        form.append("author", author.trim());
+        form.append("category", category);
+        form.append("kind", kind);
+        if (description.trim()) form.append("description", description.trim());
+        if (transcript.trim()) form.append("transcript", transcript.trim());
+        if (audio) {
+          if (audio.file && typeof (audio.file as any).name === "string") {
+            form.append("audio", audio.file, audio.file.name || audio.name);
+          } else {
             const resp = await fetch(audio.uri);
             const blob = await resp.blob();
             if (!blob.size) throw new Error("Fichier audio vide");
-            // Wrap in a File to guarantee filename + content-type
             const f = new File([blob], audio.name, { type: audio.mimeType || blob.type || "audio/mpeg" });
             form.append("audio", f, audio.name);
-          } catch (e) {
-            toast(`Impossible de lire le fichier audio: ${(e as Error).message}`);
-            return;
           }
         }
-      } else {
-        form.append("audio", { uri: audio.uri, name: audio.name, type: audio.mimeType || "audio/mpeg" } as any);
-      }
-    }
-    if (cover) {
-      if (Platform.OS === "web") {
-        if (cover.file && typeof (cover.file as any).name === "string") {
-          form.append("cover", cover.file, cover.file.name || cover.name);
-        } else {
-          try {
+        if (cover) {
+          if (cover.file && typeof (cover.file as any).name === "string") {
+            form.append("cover", cover.file, cover.file.name || cover.name);
+          } else {
             const resp = await fetch(cover.uri);
             const blob = await resp.blob();
             if (!blob.size) throw new Error("Pochette vide");
             const f = new File([blob], cover.name, { type: cover.mimeType || blob.type || "image/jpeg" });
             form.append("cover", f, cover.name);
-          } catch (e) {
-            toast(`Impossible de lire la pochette: ${(e as Error).message}`);
-            return;
           }
         }
+        const res = await fetch(`${BASE}/api/media`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form as any,
+        });
+        const body = await res.text();
+        if (!res.ok) throw new Error(body || `HTTP ${res.status}`);
       } else {
-        form.append("cover", { uri: cover.uri, name: cover.name, type: cover.mimeType || "image/jpeg" } as any);
-      }
-    }
+        // --- NATIVE path: JSON create + FileSystem.uploadAsync per file ---
+        // 1) create metadata via JSON (avoids RN's fragile FormData for text fields)
+        const created = await api<MediaItem>("/media/create-json", {
+          method: "POST",
+          body: JSON.stringify({
+            title: title.trim(), author: author.trim(),
+            category, kind,
+            description: description.trim() || null,
+            transcript: transcript.trim() || null,
+          }),
+        }, token);
 
-    setUploading(true);
-    try {
-      const BASE = process.env.EXPO_PUBLIC_BACKEND_URL!;
-      const res = await fetch(`${BASE}/api/media`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form as any,
-      });
-      const body = await res.text();
-      if (!res.ok) throw new Error(body || `HTTP ${res.status}`);
+        // 2) upload audio (if any) via FileSystem.uploadAsync
+        if (audio) {
+          const r = await FileSystem.uploadAsync(`${BASE}/api/media/${created.id}/upload`, audio.uri, {
+            httpMethod: "POST",
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: "file",
+            parameters: { kind: "audio" },
+            mimeType: audio.mimeType || "audio/mpeg",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (r.status >= 400) throw new Error(`Audio: ${r.body?.slice(0, 200) || `HTTP ${r.status}`}`);
+        }
+
+        // 3) upload cover (if any)
+        if (cover) {
+          const r = await FileSystem.uploadAsync(`${BASE}/api/media/${created.id}/upload`, cover.uri, {
+            httpMethod: "POST",
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: "file",
+            parameters: { kind: "cover" },
+            mimeType: cover.mimeType || "image/jpeg",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (r.status >= 400) throw new Error(`Pochette: ${r.body?.slice(0, 200) || `HTTP ${r.status}`}`);
+        }
+      }
+
       toast("Média créé ✓");
       resetForm();
       qc.invalidateQueries({ queryKey: ["media"] });

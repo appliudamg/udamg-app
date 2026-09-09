@@ -301,6 +301,69 @@ def register_media(app, api_router, current_user, require_role, roles):
             raise HTTPException(404, "Média introuvable")
         return _doc_to_media(d)
 
+    @api_router.post("/media/create-json", response_model=MediaItem, status_code=201)
+    async def create_media_json(
+        request: Request,
+        data: dict,
+        user=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER)),
+    ):
+        """Create media WITHOUT files. Use POST /media/{id}/upload afterwards.
+        Preferred path for native clients where multipart with files is fragile."""
+        db = request.app.state.db
+        title = (data.get("title") or "").strip()
+        author = (data.get("author") or "").strip()
+        category = data.get("category") or ""
+        kind_ = data.get("kind") or "audio"
+        if not title or not author:
+            raise HTTPException(400, "Titre et orateur requis")
+        if category not in MEDIA_CATEGORIES:
+            raise HTTPException(400, f"Catégorie invalide (attendues: {MEDIA_CATEGORIES})")
+        if kind_ not in MEDIA_KINDS:
+            raise HTTPException(400, f"Type invalide (attendus: {MEDIA_KINDS})")
+        mid = str(uuid4())
+        doc = {
+            "_id": mid, "title": title, "author": author,
+            "category": category, "kind": kind_,
+            "audio_path": None, "cover_path": None,
+            "duration": data.get("duration"),
+            "description": (data.get("description") or "").strip() or None,
+            "transcript": (data.get("transcript") or "").strip() or None,
+            "created_at": _now(),
+            "created_by": user["_id"],
+        }
+        await db.media_items.insert_one(doc)
+        return _doc_to_media(doc)
+
+    @api_router.post("/media/{mid}/upload", response_model=MediaItem)
+    async def upload_media_file(
+        mid: str,
+        request: Request,
+        kind: str = Form(...),  # "audio" | "cover"
+        file: UploadFile = File(...),
+        _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER)),
+    ):
+        """Upload one file (audio OR cover) to an existing media entry.
+        Preferred path for native clients using FileSystem.uploadAsync (one file per call)."""
+        db = request.app.state.db
+        if kind not in ("audio", "cover"):
+            raise HTTPException(400, "kind doit être 'audio' ou 'cover'")
+        media = await db.media_items.find_one({"_id": mid})
+        if not media:
+            raise HTTPException(404, "Média introuvable")
+        data = await file.read()
+        if not data:
+            raise HTTPException(400, "Fichier vide")
+        ext = (file.filename or f"{kind}.bin").rsplit(".", 1)[-1].lower()[:5] or ("mp3" if kind == "audio" else "jpg")
+        path = f"{APP_NAME}/media/{mid}/{kind}.{ext}"
+        ct = file.content_type or mimetypes.guess_type(file.filename or "")[0] or (
+            "audio/mpeg" if kind == "audio" else "image/jpeg"
+        )
+        await run_in_threadpool(_put_object, path, data, ct)
+        field = "audio_path" if kind == "audio" else "cover_path"
+        await db.media_items.update_one({"_id": mid}, {"$set": {field: path}})
+        fresh = await db.media_items.find_one({"_id": mid})
+        return _doc_to_media(fresh)
+
     @api_router.post("/media", response_model=MediaItem, status_code=201)
     async def create_media(
         request: Request,
