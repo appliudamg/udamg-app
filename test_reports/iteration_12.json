@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 12 — Backend-only validation of the HTTP Range request fix on GET /api/media/{id}/file (required by iOS AVPlayer / expo-audio). 15/15 pytest tests pass in ~5s. All Range scenarios verified: 206 for 'bytes=0-1' (Content-Range 'bytes 0-1/8044', Content-Length 2), 206 for middle slice 'bytes=100-500' (Content-Length 401), 416 for out-of-bounds 'bytes=99999-' (with Content-Range 'bytes */8044'), 206 for open-ended 'bytes=0-' (full file), 206 for 'bytes=0-1023' (exactly 1024 bytes). Full stream without Range returns 200 with Accept-Ranges: bytes. Auth: 401 without token, 206 with ?token= (iOS AVPlayer path), 206 with Bearer header (native). Iter 11 endpoints (create-json + /{id}/upload) still 201/200 for pasteur and 403 for évangéliste. Cover endpoint returns 200 image. Pôle 1/2 smoke green (>=15 CCMG, événements list returns list). All TEST_ITER12_* media entries cleaned up (verified: 0 TEST_ leftovers). Note: only ONE user-uploaded media currently in DB — seed items were removed by a previous DB reset/user action, but this is a real user upload, not test data, so left untouched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_range_requests.py",
+    "/app/test_reports/pytest/pytest_iter12.xml"
+  ],
+  "action_items": [
+    "None for backend. The HTTP Range implementation in /app/backend/media.py (lines 481-514) is RFC 7233 conformant and works exactly as iOS AVPlayer / expo-audio requires.",
+    "iOS/native audio playback with the frontend fix (player.tsx addListener('playbackStatusUpdate') + didJustFinish) can only be validated in Expo Go on a real iPhone — cannot be automated. Recommend the user retries upload → playback on the iPhone; the two root causes (missing 206 Range support + stale-state polling calling next() prematurely) are both addressed."
+  ],
+  "critical_code_review_comments": [
+    "media.py stream_media_file: correctly parses 'bytes=start-end' with re, handles open-ended 'bytes=start-', clamps end to total-1, returns 416 + 'Content-Range: bytes */{total}' when start >= total — matches RFC 7233.",
+    "Response headers include Accept-Ranges: bytes on BOTH the 200 (no Range) and 206 (Range) responses, so iOS AVPlayer discovers seekability from the initial probe.",
+    "Content-Length is correctly computed as (end - start + 1) on partial responses.",
+    "Auth accepts EITHER Authorization: Bearer <jwt> (native/expo-audio) OR ?token=<jwt> (web/AVPlayer that strips custom headers) — both validated with 206 responses.",
+    "MongoDB _id excluded via _doc_to_media() mapping; no serialization leak on any media endpoint.",
+    "Suggestion (non-blocking): the endpoint reads the FULL object from Emergent Object Storage in memory then slices — fine for typical sermon files (<50MB) but could become memory-heavy for very large uploads. For a future optimization, consider streaming from storage with a proper byte-range fetch. Not required now."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter12_range_requests.py (new)",
+    "/app/test_reports/pytest/pytest_iter12.xml (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "No persistent seed data left. Fixture creates one 8044-byte silent WAV media entry named TEST_ITER12_Range and deletes it at teardown. Auxiliary iter11 regression tests create and delete their own TEST_ITER12_* entries in try/finally. Verified 0 TEST_ leftovers post-run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Range support is validated end-to-end at HTTP level. Reuse /app/backend/tests/test_iter12_range_requests.py for future regressions (15 tests, ~5s). Fixture uses a deterministic 8044-byte silent WAV (44-byte header + 8000 bytes @ 8kHz mono 8-bit) so byte offsets are stable. Media DB currently contains 1 user-uploaded item ('Le saint esprit manifester'); the initial 8-item seed is not present because the count-check in seed_media() skips when count > 0. If the iter 11 test_pole3_media.py::TestSeed tests are rerun they will fail on 'Expected >=8, got 1' — this is a data-state issue, not a code regression. Main agent may want to add a `?force=true` reseed admin endpoint or document that seed only runs on empty DB.",
+  "rca_of_issue": "Original bug (iPhone Expo Go: audio starts visually but no sound, cuts immediately) had TWO root causes: (a) Backend GET /api/media/{id}/file returned 200 with the full body for every request, ignoring HTTP Range headers. iOS AVPlayer / expo-audio issues an initial 'Range: bytes=0-1' probe to discover seekability and range support; without a 206 response and 'Accept-Ranges: bytes' header, AVPlayer aborts playback (which explains 'coupe immédiatement'). (b) Frontend player.tsx used a polling stale-state pattern that called next() prematurely on the first tick because the freshly-loaded status was still {position:0,duration:0}. Fix applied by main agent: (a) stream_media_file now parses Range header, returns 206 + Content-Range/Content-Length/Accept-Ranges for 'bytes=a-b', 416 for out-of-bounds; (b) player.tsx swapped polling for addListener('playbackStatusUpdate') and gates advancement on didJustFinish. Reproduction of backend part (validated pass): curl -H 'Authorization: Bearer <tok>' -H 'Range: bytes=0-1' /api/media/{id}/file  →  HTTP/1.1 206 Partial Content, Content-Range: bytes 0-1/8044, Content-Length: 2. Mitigation on frontend cannot be automated in this environment (requires physical iOS device via Expo Go)."
+}

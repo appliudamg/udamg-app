@@ -456,9 +456,8 @@ def register_media(app, api_router, current_user, require_role, roles):
         mid: str,
         request: Request,
         token: Optional[str] = Query(None),
-        authorization: Optional[str] = None,
     ):
-        # accept either Bearer header (native) or ?token=... (web)
+        # accept either Bearer header (native) or ?token=... (web / iOS AVPlayer)
         auth_hdr = request.headers.get("authorization") or ""
         jwt_token = None
         if auth_hdr.lower().startswith("bearer "):
@@ -467,7 +466,6 @@ def register_media(app, api_router, current_user, require_role, roles):
             jwt_token = token
         if not jwt_token:
             raise HTTPException(401, "Token requis")
-        # decode via app state secret
         try:
             secret = os.environ["JWT_SECRET"]
             jwt.decode(jwt_token, secret, algorithms=["HS256"], issuer=os.environ.get("JWT_ISSUER", "udamg-api"))
@@ -478,10 +476,42 @@ def register_media(app, api_router, current_user, require_role, roles):
         if not d or not d.get("audio_path"):
             raise HTTPException(404, "Audio non disponible")
         content, ctype = await run_in_threadpool(_get_object, d["audio_path"])
-        return Response(content=content, media_type=ctype, headers={
-            "Cache-Control": "public, max-age=3600",
-            "Accept-Ranges": "bytes",
-        })
+        total = len(content)
+
+        # Handle HTTP Range requests (required by iOS AVPlayer / expo-audio for streaming)
+        range_header = request.headers.get("range") or request.headers.get("Range")
+        if range_header:
+            import re as _re
+            m = _re.match(r"bytes=(\d+)-(\d*)", range_header)
+            if m:
+                start = int(m.group(1))
+                end_s = m.group(2)
+                end = int(end_s) if end_s else total - 1
+                if start >= total:
+                    return Response(status_code=416, headers={"Content-Range": f"bytes */{total}"})
+                end = min(end, total - 1)
+                length = end - start + 1
+                return Response(
+                    content=content[start:end + 1],
+                    status_code=206,
+                    media_type=ctype,
+                    headers={
+                        "Content-Range": f"bytes {start}-{end}/{total}",
+                        "Accept-Ranges": "bytes",
+                        "Content-Length": str(length),
+                        "Cache-Control": "public, max-age=3600",
+                    },
+                )
+
+        return Response(
+            content=content,
+            media_type=ctype,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(total),
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
 
     @api_router.get("/media/{mid}/cover")
     async def stream_media_cover(mid: str, request: Request):

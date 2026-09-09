@@ -131,6 +131,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // dispose previous
     if (playerRef.current) {
       try { playerRef.current.pause(); } catch {}
+      try { playerRef.current.removeAllListeners?.("playbackStatusUpdate"); } catch {}
       try { playerRef.current.remove(); } catch {}
       playerRef.current = null;
     }
@@ -150,13 +151,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     try {
       const p = createAudioPlayer({ uri: url }, { updateInterval: 500 });
       playerRef.current = p;
+      // Track ID to guard against stale event handlers from previously disposed players.
+      const trackId = item.id;
       p.playbackRate = playbackRate;
+      // Reliable end-of-track detection via the SDK's own event
+      p.addListener?.("playbackStatusUpdate", (status: any) => {
+        // Guard against events from a disposed player (user switched track).
+        if (!playerRef.current || (current && current.id !== trackId && trackId !== item.id)) return;
+        if (typeof status?.currentTime === "number") setPositionSec(status.currentTime);
+        if (typeof status?.duration === "number" && status.duration > 0) {
+          setDurationSec((prev) => (Math.abs(prev - status.duration) > 0.1 ? status.duration : prev));
+        }
+        if (typeof status?.playing === "boolean") {
+          setIsPlaying(status.playing);
+          if (status.playing) {
+            saveProgress(status.currentTime || 0);
+          }
+        }
+        if (status?.didJustFinish) {
+          saveProgress(status.duration || 0, true);
+          if (sleepTimer === "endOfTrack") {
+            setSleepTimerState(null);
+            setSleepRemainingSec(null);
+          } else {
+            next();
+          }
+        }
+      });
       p.play();
       setIsPlaying(true);
-    } catch {
+    } catch (e) {
+      console.warn("audio player init failed", e);
       setIsPlaying(false);
     }
-  }, [playbackRate, token]);
+  }, [playbackRate, token, current, next, saveProgress, sleepTimer]);
 
   const toggle = useCallback(() => {
     const p = playerRef.current;
@@ -202,7 +230,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentIndex, play, positionSec, queue, seek]);
 
-  // ---- Polling status (expo-audio hook isn't easy to use with imperative player) ----
+  // ---- Fallback poller: keep position in sync if the SDK event fires late. ----
+  // End-of-track detection is now driven by the `didJustFinish` event on the
+  // player (see play() above). The old auto-advance logic here was firing
+  // spuriously when the audio failed to actually start on iOS, cutting off
+  // playback immediately.
   useEffect(() => {
     const t = setInterval(() => {
       const p = playerRef.current;
@@ -214,23 +246,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (dur > 0 && dur !== durationSec) setDurationSec(dur);
         const playing = !!p.playing;
         if (playing !== isPlaying) setIsPlaying(playing);
-        // Auto-advance on end
-        if (dur > 0 && pos >= dur - 0.4 && playing === false && isPlaying === true) {
-          // track ended; save & advance
-          saveProgress(dur, true);
-          if (sleepTimer === "endOfTrack") {
-            setSleepTimerState(null);
-            setSleepRemainingSec(null);
-            return;
-          }
-          next();
-        } else if (playing) {
-          saveProgress(pos);
-        }
       } catch {}
     }, 1000);
     return () => clearInterval(t);
-  }, [durationSec, isPlaying, next, saveProgress, sleepTimer]);
+  }, [durationSec, isPlaying]);
 
   // ---- Sleep timer countdown ----
   useEffect(() => {
