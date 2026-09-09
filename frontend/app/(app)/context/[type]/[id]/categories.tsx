@@ -5,9 +5,9 @@ import { CATEGORIES } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
 
 const ICONS: Record<string, string> = {
-  "GÉDÉON": "⚔️",
-  "Mission JAC": "🌟",
-  "CCMG": "⛪",
+  "GÉDÉON": "G",
+  "Mission JAC": "J",
+  "CCMG": "C",
 };
 
 export default function Categories() {

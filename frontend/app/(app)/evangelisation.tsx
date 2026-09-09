@@ -30,7 +30,7 @@ export default function Evangelisation() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.subtitle}>Choisissez un contexte de mission</Text>
+        <Text style={styles.subtitle}>Que voulez-vous faire ?</Text>
 
         <Pressable
           testID="evang-eglises-card"
@@ -41,8 +41,8 @@ export default function Evangelisation() {
             <LinearGradient colors={["rgba(0,71,171,0.55)", "rgba(15,23,42,0.85)"]} style={StyleSheet.absoluteFillObject} />
             <View style={styles.cardOverlay}>
               <Text style={styles.cardEyebrow}>MISSION</Text>
-              <Text style={styles.cardTitle}>Églises de France</Text>
-              <Text style={styles.cardSubtitle}>CCMG Paris · Angers · Nantes · Lyon</Text>
+              <Text style={styles.cardTitle}>Gérer nos églises</Text>
+              <Text style={styles.cardSubtitle}>15 églises CCMG · France</Text>
             </View>
           </ImageBackground>
         </Pressable>

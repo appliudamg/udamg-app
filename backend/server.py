@@ -102,6 +102,7 @@ class ContactIn(BaseModel):
     prenom: str
     tel: Optional[str] = None
     categorie: str
+    referent: Optional[str] = None
     niveau: int = Field(default=1, ge=1, le=4)
     notes: Optional[str] = None
     context_type: Literal["ville", "programme"]
@@ -113,6 +114,7 @@ class ContactUpdate(BaseModel):
     prenom: Optional[str] = None
     tel: Optional[str] = None
     categorie: Optional[str] = None
+    referent: Optional[str] = None
     niveau: Optional[int] = Field(default=None, ge=1, le=4)
     notes: Optional[str] = None
 
@@ -308,20 +310,26 @@ async def _seed(db):
                 "disabled": False, "created_at": datetime.now(timezone.utc),
             })
 
-    # Églises
-    if await db.villes.count_documents({}) == 0:
-        await db.villes.insert_many([
-            {"_id": str(uuid4()), "nom": "CCMG Paris", "code_postal": "75001", "pays": "France", "whatsapp_link": "https://chat.whatsapp.com/paris"},
-            {"_id": str(uuid4()), "nom": "CCMG Angers", "code_postal": "49000", "pays": "France", "whatsapp_link": "https://chat.whatsapp.com/angers"},
-            {"_id": str(uuid4()), "nom": "CCMG Nantes", "code_postal": "44000", "pays": "France", "whatsapp_link": "https://chat.whatsapp.com/nantes"},
-            {"_id": str(uuid4()), "nom": "CCMG Lyon", "code_postal": "69001", "pays": "France", "whatsapp_link": "https://chat.whatsapp.com/lyon"},
-        ])
+    # Églises officielles CCMG (15)
+    OFFICIAL_CCMG = [
+        "CCMG Angers", "CCMG Brest", "CCMG Châteaubriant", "CCMG La Roche sur Yon",
+        "CCMG La Rochelle", "CCMG Le Mans", "CCMG Morlaix", "CCMG Nantes",
+        "CCMG Paris", "CCMG Quimper", "CCMG Rennes", "CCMG Saint-Nazaire",
+        "CCMG Saumur", "CCMG Tours", "CCMG Vannes - Redon",
+    ]
+    existing_villes = {v["nom"]: v for v in await db.villes.find({}).to_list(500)}
+    for nom in OFFICIAL_CCMG:
+        if nom not in existing_villes:
+            await db.villes.insert_one({
+                "_id": str(uuid4()), "nom": nom, "code_postal": "", "pays": "France",
+                "whatsapp_link": None,
+            })
 
-    # Programmes
+    # Programmes (sans obligation de code)
     if await db.programmes.count_documents({}) == 0:
         await db.programmes.insert_many([
-            {"_id": str(uuid4()), "nom": "Convention EBED 2026", "description": "Grande convention nationale", "code_acces": "EBED2026", "is_ebed": True},
-            {"_id": str(uuid4()), "nom": "Retraite Spirituelle", "description": "Retraite annuelle des responsables", "code_acces": "RETRAITE", "is_ebed": False},
+            {"_id": str(uuid4()), "nom": "Convention EBED 2026", "description": "Grande convention nationale", "code_acces": None, "is_ebed": True},
+            {"_id": str(uuid4()), "nom": "Retraite Spirituelle", "description": "Retraite annuelle", "code_acces": None, "is_ebed": False},
         ])
 
     # Événements
@@ -393,6 +401,60 @@ async def list_villes(_=Depends(current_user)):
     return [Ville(id=d["_id"], nom=d["nom"], code_postal=d["code_postal"], pays=d.get("pays", "France"), whatsapp_link=d.get("whatsapp_link")) for d in docs]
 
 
+class VilleIn(BaseModel):
+    nom: str
+    code_postal: str = ""
+    pays: str = "France"
+    whatsapp_link: Optional[str] = None
+
+
+@api.post("/villes", response_model=Ville, status_code=201)
+async def create_ville(data: VilleIn, _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER))):
+    doc = {"_id": str(uuid4()), "nom": data.nom.strip(), "code_postal": data.code_postal,
+           "pays": data.pays, "whatsapp_link": data.whatsapp_link}
+    await app.state.db.villes.insert_one(doc)
+    return Ville(id=doc["_id"], nom=doc["nom"], code_postal=doc["code_postal"], pays=doc["pays"], whatsapp_link=doc.get("whatsapp_link"))
+
+
+@api.delete("/villes/{vid}", status_code=204)
+async def delete_ville(vid: str, _=Depends(require_role(ROLE_PASTEUR))):
+    res = await app.state.db.villes.delete_one({"_id": vid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Église introuvable")
+    return None
+
+
+class ProgrammeIn(BaseModel):
+    nom: str
+    description: Optional[str] = None
+    is_ebed: bool = False
+
+
+@api.post("/programmes", response_model=Programme, status_code=201)
+async def create_programme(data: ProgrammeIn, _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER))):
+    doc = {"_id": str(uuid4()), "nom": data.nom.strip(), "description": data.description,
+           "code_acces": None, "is_ebed": data.is_ebed}
+    await app.state.db.programmes.insert_one(doc)
+    return Programme(id=doc["_id"], nom=doc["nom"], description=doc.get("description"),
+                     code_acces=None, is_ebed=doc["is_ebed"])
+
+
+@api.delete("/programmes/{pid}", status_code=204)
+async def delete_programme(pid: str, _=Depends(require_role(ROLE_PASTEUR))):
+    res = await app.state.db.programmes.delete_one({"_id": pid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Programme introuvable")
+    return None
+
+
+@api.delete("/anciens/{aid}", status_code=204)
+async def delete_ancien(aid: str, _=Depends(require_role(ROLE_PASTEUR))):
+    res = await app.state.db.anciens.delete_one({"_id": aid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Ancien introuvable")
+    return None
+
+
 # ---- Programmes
 @api.get("/programmes", response_model=List[Programme])
 async def list_programmes(_=Depends(current_user)):
@@ -454,7 +516,7 @@ async def create_contact(data: ContactIn, user=Depends(current_user)):
         "prenom": data.prenom.strip(),
         "tel": data.tel,
         "categorie": data.categorie,
-        "referent": f"{user['prenom']} {user['nom']}".strip(),
+        "referent": (data.referent or "").strip() or f"{user['prenom']} {user['nom']}".strip(),
         "niveau": data.niveau,
         "notes": data.notes,
         "date_ajout": now.strftime("%d/%m/%Y"),
@@ -578,7 +640,27 @@ async def contacts_stats(context_type: str, context_id: str, user=Depends(curren
         "niveau_3_invites": by_niveau.get(3, 0),
         "niveau_4_disciples": by_niveau.get(4, 0),
         "by_categorie": by_categorie,
+        "by_week": _weekly_breakdown(docs),
     }
+
+
+def _weekly_breakdown(docs: list) -> list:
+    """Return last 8 ISO weeks with contact counts."""
+    from collections import Counter
+    weeks = Counter()
+    for d in docs:
+        dt = d.get("created_at")
+        if not dt: continue
+        iso = dt.isocalendar()
+        key = f"{iso[0]}-S{iso[1]:02d}"
+        weeks[key] += 1
+    now = datetime.now(timezone.utc)
+    keys = []
+    for i in range(7, -1, -1):
+        d = now - timedelta(weeks=i)
+        iso = d.isocalendar()
+        keys.append(f"{iso[0]}-S{iso[1]:02d}")
+    return [{"semaine": k, "count": weeks.get(k, 0)} for k in keys]
 
 
 # ---- Événements (unchanged core)
@@ -816,9 +898,10 @@ async def export_xlsx(context_type: str, context_id: str, user=Depends(current_u
             egl[key] = egl.get(key, 0) + 1
         for k, v in sorted(egl.items()):
             ws.append([k, v])
-    # Per-category sheets
+    # Per-category sheets (accent-safe sheet names)
     for cat in CATEGORIES:
-        s = wb.create_sheet(cat[:31])
+        safe = strip_accents(cat).upper()[:31] or "CAT"
+        s = wb.create_sheet(safe)
         headers = ["Nom", "Prénom", "Téléphone", "Niveau", "Libellé", "Référent", "Date ajout", "Église/Programme", "Notes"]
         s.append(headers)
         for i, h in enumerate(headers, 1):

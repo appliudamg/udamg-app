@@ -87,3 +87,12 @@ GET/POST/PATCH/DELETE `/api/event/participants` · POST `/api/event/participants
 `admin@udamg.app` / `AdminUdamg2026!` (Pasteur) · `ouvrier@udamg.app` / `OuvrierUdamg2026!` · `evangeliste@udamg.app` / `EvangUdamg2026!`
 
 Codes programmes évangélisation : `EBED2026`, `RETRAITE`. Google Login via Emergent OAuth disponible sur `/login`.
+
+## Raffinements Pôle 1 (message 287 — validés iter 9-10)
+- 15 églises CCMG officielles seedées (Angers → Vannes-Redon) + création/suppression réservées au pasteur.
+- Champ « Référent » éditable dans le formulaire de contact ; POST/PATCH `/contacts` envoient `referent` (fallback : `{prenom} {nom}` de l'utilisateur si vide).
+- 4 modèles Relance (N1-N4) précis dans `src/api.ts::buildRelanceMessage` avec `{prenom}`, `{referent}`, `{nom_eglise}`.
+- Programmes sans obligation de code d'accès + suppression pasteur.
+- Suppression physique (hard delete) pour Anciens (204).
+- Stats hebdomadaires (`by_week` sur 8 dernières semaines ISO) + exports Excel/PDF corrigés (magic bytes validés).
+

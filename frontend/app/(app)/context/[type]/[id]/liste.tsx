@@ -86,7 +86,7 @@ export default function Liste() {
           method: "PATCH",
           body: JSON.stringify({
             nom: c.nom, prenom: c.prenom, tel: c.tel,
-            categorie: c.categorie, niveau: c.niveau, notes: c.notes,
+            categorie: c.categorie, referent: c.referent, niveau: c.niveau, notes: c.notes,
           }),
         }, token);
       }
@@ -94,7 +94,7 @@ export default function Liste() {
         method: "POST",
         body: JSON.stringify({
           nom: c.nom, prenom: c.prenom, tel: c.tel,
-          categorie: c.categorie, niveau: c.niveau, notes: c.notes,
+          categorie: c.categorie, referent: c.referent, niveau: c.niveau, notes: c.notes,
           context_type: type, context_id: id,
         }),
       }, token);
@@ -147,7 +147,7 @@ export default function Liste() {
     await relanceMut.mutateAsync({ cid: relanceFor.id, niveau: relanceLvl });
     const egliseNom = relanceFor.context_nom || nom || "";
     const wa = villes?.find(v => v.id === relanceFor.context_id)?.whatsapp_link;
-    const msg = buildRelanceMessage(relanceFor.prenom, egliseNom, wa);
+    const msg = buildRelanceMessage(relanceFor.prenom, egliseNom, wa, relanceLvl, relanceFor.referent || "notre équipe");
     const tel = relanceFor.tel || "";
     if (!tel) {
       Alert.alert("Erreur", "Numéro de téléphone manquant");
@@ -347,11 +347,14 @@ export default function Liste() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.label}>Référent (auto)</Text>
+                <Text style={styles.label}>Référent</Text>
                 <TextInput
+                  testID="form-referent"
                   value={editing?.referent || ""}
-                  editable={false}
-                  style={[styles.input, { opacity: 0.6 }]}
+                  onChangeText={(t) => setEditing(e => e ? { ...e, referent: t } : e)}
+                  placeholder="Nom du référent"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
                 />
               </View>
 

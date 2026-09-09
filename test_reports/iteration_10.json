@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 10 retest of the 3 fixes from iteration 9. All 3 fixes verified end-to-end. Backend: created /app/backend/tests/test_iter10_regression.py (8 tests, 8 passed) covering (a) POST /api/contacts with custom referent 'Frère Timothée' persists and round-trips via GET, (b) PATCH /api/contacts referent → 'Sœur Marie' persists, (c) POST /api/contacts without referent (and with empty string) defaults to '${user.prenom} ${user.nom}' (verified as 'Pasteur UDAMG'), (d) pasteur can POST /api/villes 'CCMG Lyon Test' and DELETE it, (e) evangeliste receives 403 on both POST and DELETE /api/villes. Frontend: on /villes as pasteur, the '+ Nouveau' button appears, the modal exposes ville-form-nom / ville-form-cp / ville-form-submit; creating 'CCMG TestUI 9999' makes the card appear in the grid; tapping the per-card ville-delete-{id} triggers window.confirm and removes the card. As evangeliste, both villes-create button and ville-delete-* buttons are absent, matching the RBAC in the backend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_regression.py",
+    "/app/test_reports/pytest/pytest_iter10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:100 ContactIn now has `referent: Optional[str] = None` ✓",
+    "server.py:112 ContactUpdate now has `referent: Optional[str] = None` ✓",
+    "server.py:519 create_contact uses `(data.referent or '').strip() or f\"{user['prenom']} {user['nom']}\".strip()` — correct fallback ✓",
+    "server.py:540 update_contact propagates referent via exclude_unset (Optional field survives PATCH) ✓",
+    "liste.tsx:89 and :97 saveMut now sends `referent: c.referent` in both PATCH and POST bodies ✓",
+    "villes.tsx now has villes-create button (line 79), create modal (150), per-card ville-delete-{id} (137) gated by isPasteur, and web/native confirmation via window.confirm/Alert.alert ✓",
+    "No new regressions detected. No React Native deprecated packages (expo-av/expo-barcode-scanner/expo-background-fetch) referenced in villes.tsx."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (8/8 pytest iter10)", "frontend": "100% — all 3 iter9 UI/UX fixes verified (villes-create modal, ville-delete per-card, custom referent round-trip)"},
+  "seed_data_creation": "TEST_Ref10, TEST_RefDefault10, TEST_RefEmpty10 contacts and 'CCMG Lyon Test'/'CCMG TestUI 9999' villes cleaned up in fixture teardown and by the UI delete step. No residue expected.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 fixes from iteration 9 confirmed. /app/backend/tests/test_iter10_regression.py is idempotent and can be reused. If further contact/ville flow work happens, also re-run /app/backend/tests/test_pole1_refinements.py from iter9 (the previous 17/18 suite). No follow-up required.",
+  "rca_of_issue": "N/A — retest confirmed the fixes."
+}

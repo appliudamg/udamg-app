@@ -1,0 +1,48 @@
+{
+  "summary": "Tested Pôle 1 refinements (backend + frontend). Backend pytest suite created (18 tests, 17 passed, 1 failed) covering: auth 3 roles, 15 official CCMG churches seeded, POST/DELETE /api/villes RBAC (403 for evangeliste), programme creation without code + delete, hard-delete /api/anciens RBAC, contact CRUD with editable referent, relance niveau 1→2→3→4, xlsx & pdf exports (ville + programme), weekly stats (by_week), global bilan. Frontend UI smoke test on /villes (15 cards render), church hub (Nouveau Contact → form opens with editable Référent input), /programmes (create modal has no code field, delete button visible for pasteur). TWO critical gaps found: (1) editable Référent field is silently discarded — backend ContactIn schema has no `referent` field and create_contact hardcodes it to the logged-in user's name, and frontend saveMut mutation body does NOT include `referent`; whatever user types is lost. (2) /villes screen has NO UI to create or delete churches — only backend endpoints exist. All other refinements pass end-to-end.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/contacts", "issue": "`referent` field is not accepted by `ContactIn` Pydantic model and is hardcoded in create_contact to `f\"{user.prenom} {user.nom}\"` (server.py:517). The 'editable Référent' refinement is a no-op at the backend level. Fix: add `referent: Optional[str] = None` to ContactIn and use `data.referent or f\"{user.prenom} {user.nom}\"` on line 517. Same for `ContactUpdate` (server.py:111-117) so PATCH can also update referent.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "villes.tsx", "issue": "No create-church UI (no + button, no modal). Refinement asked for 'ability to create/delete churches' for pasteur. Only backend endpoints POST/DELETE /api/villes exist; frontend has no way to invoke them.", "testID": "villes-create (missing)", "priority": "HIGH"},
+      {"component": "villes.tsx", "issue": "No delete-church UI on ville cards for pasteur (compare to programmes.tsx which has a Supprimer button per card).", "testID": "ville-delete-{id} (missing)", "priority": "HIGH"},
+      {"component": "context/[type]/[id]/liste.tsx form-submit / form-categorie", "issue": "Missing testID on Enregistrer button and category radio buttons — makes E2E tests brittle. Minor.", "testID": "form-submit, form-categorie", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "New / Edit contact — Référent", "issue": "Frontend form allows editing 'Référent' but saveMut mutation (liste.tsx:87-99) does NOT include the `referent` key in the POST/PATCH body. Combined with backend hardcoding, the edited value is silently discarded. Both frontend and backend must be fixed.", "affected_testIDs": ["form-referent"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pole1_refinements.py",
+    "/app/test_reports/pytest/pytest_iter9_pole1.xml"
+  ],
+  "action_items": [
+    "BACKEND: Add `referent: Optional[str] = None` to `ContactIn` (server.py:100) and `ContactUpdate` (server.py:111). In `create_contact` (server.py:517) use `data.referent.strip() if data.referent else f\"{user.prenom} {user.nom}\".strip()`. Update `update_contact` to also propagate the referent field.",
+    "FRONTEND: In /app/frontend/app/(app)/context/[type]/[id]/liste.tsx line 87-99, include `referent: c.referent` in BOTH the PATCH and POST JSON bodies so the editable value is actually sent to the API.",
+    "FRONTEND: Add create-church UI to /app/frontend/app/(app)/villes.tsx (button/modal + POST /api/villes) and per-card Delete button gated to pasteur (DELETE /api/villes/{id}). Mirror the pattern used in programmes.tsx.",
+    "(minor) Add testID='form-submit' and testID='form-categorie-{cat}' to Enregistrer button and category chips in liste.tsx to stabilize E2E."
+  ],
+  "critical_code_review_comments": [
+    "server.py:517 hardcodes referent — refinement never took effect at the API layer.",
+    "liste.tsx:87-99 saveMut body omits `referent` even though the form input mutates state — dead field.",
+    "villes.tsx has no create/delete UI despite the refinement scope explicitly asking for it.",
+    "Positive: server.py:311-324 idempotently seeds the 15 official CCMG church names; existing custom churches are preserved.",
+    "Positive: DELETE /api/villes, /api/programmes, /api/anciens are correctly gated to ROLE_PASTEUR only (403 confirmed for evangeliste).",
+    "Positive: contacts_stats now returns `by_week` (last 8 ISO weeks) — meets the weekly-stats refinement.",
+    "Positive: Exports xlsx/pdf return valid binaries starting with correct magic bytes (PK / %PDF-).",
+    "Positive: FE buildRelanceMessage (api.ts:98-153) correctly implements the 4 templates with prenom/referent/nomEglise interpolation and defaults to 'notre équipe' when referent is empty."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "94% (17/18 pytest)", "frontend": "60% — 3/5 refinements fully wired end-to-end (15 seeded ✓, no-code programme ✓, weekly stats ✓; editable referent BROKEN; create/delete ville UI MISSING)"},
+  "seed_data_creation": "Test data (TEST_CCMG_Zurich, TEST_CCMG_Kill, TEST_Prog_NoCode, TEST_Prog_Perm, TEST_Ref, TEST_Rel) all cleaned up in fixtures. UI E2E may have left one TEST_UI/Referent contact on CCMG Angers — main agent can delete via UI if desired.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Re-run /app/backend/tests/test_pole1_refinements.py after main agent adds `referent` field to ContactIn/ContactUpdate and updates saveMut. To re-test church create/delete UI, look for a new testID `villes-create` on /villes and a per-card `ville-delete-{id}`. Login: admin@udamg.app / AdminUdamg2026!. All Pôle 2 flows already validated iterations 1-8, no regression suspected here.",
+  "rca_of_issue": "REFERENT BUG RCA: (1) server.py:100 ContactIn model omits `referent` → FastAPI drops it from request body silently. (2) server.py:517 create_contact ignores data.referent entirely, always writing `f\"{user.prenom} {user.nom}\"`. (3) frontend liste.tsx:87-99 saveMut body doesn't include the `referent` key even for PATCH. Reproduction: login as pasteur, POST /api/contacts with `{referent:'Frère Marc', ...}` → response shows referent='Pasteur UDAMG'. Mitigation: add optional referent to ContactIn + ContactUpdate; use data.referent when provided in create_contact and update_contact; include c.referent in FE mutation body."
+}

@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { useState } from "react";
+import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, Alert, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, Contact, niveauColor } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
@@ -9,14 +10,34 @@ import { colors, spacing, radius } from "@/src/theme";
 export default function Anciens() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const qc = useQueryClient();
   const { type, id, nom } = useLocalSearchParams<{ type: string; id: string; nom?: string }>();
+  const isPasteur = user?.role === "pasteur";
 
   const { data, isLoading } = useQuery({
     queryKey: ["anciens", type, id],
     queryFn: () => api<Contact[]>(`/anciens?context_type=${type}&context_id=${id}`, {}, token),
     enabled: !!token && !!id && !!type,
   });
+
+  const delMut = useMutation({
+    mutationFn: (aid: string) => api(`/anciens/${aid}`, { method: "DELETE" }, token),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["anciens", type, id] }),
+  });
+
+  const askDelete = (c: Contact) => {
+    const doDel = () => delMut.mutate(c.id);
+    const msg = `Supprimer définitivement ${c.prenom} ${c.nom} ?`;
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(msg)) doDel();
+      return;
+    }
+    Alert.alert("Confirmer", msg, [
+      { text: "Annuler", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: doDel },
+    ]);
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -51,6 +72,15 @@ export default function Anciens() {
                 <Text style={styles.meta}>📁 Archivé · {item.categorie}</Text>
                 {!!item.tel && <Text style={styles.meta}>📞 {item.tel}</Text>}
                 <Text style={styles.meta}>Référent : {item.referent}</Text>
+                {isPasteur && (
+                  <Pressable
+                    testID={`ancien-delete-${item.id}`}
+                    onPress={() => askDelete(item)}
+                    style={{ backgroundColor: colors.error, borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm, alignItems: "center" }}
+                  >
+                    <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 12 }}>🗑 Supprimer définitivement</Text>
+                  </Pressable>
+                )}
               </View>
             );
           }}
