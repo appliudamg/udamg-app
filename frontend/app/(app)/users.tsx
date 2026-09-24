@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, FlatList, TextInput, ActivityIndicator, Modal, ScrollView,
+  View, Text, StyleSheet, Pressable, SectionList, TextInput, ActivityIndicator, Modal, ScrollView,
   KeyboardAvoidingView, Platform, RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -14,6 +14,9 @@ import { colors, spacing, radius } from "@/src/theme";
 
 type FormState = { email: string; nom: string; prenom: string; role: Role; password: string };
 const EMPTY: FormState = { email: "", nom: "", prenom: "", role: "membre", password: "" };
+
+// Ordre d'affichage des blocs par rôle
+const BLOCK_ORDER: Role[] = ["membre", "disciple", "ouvrier", "leader", "berger", "missionnaire", "pasteur", "admin", "equipe_technique"];
 
 const ROLE_HELP: Record<Role, string> = {
   admin: "Accès total · gère les utilisateurs · envoie des messages",
@@ -43,9 +46,14 @@ export default function UsersAdmin() {
     enabled: !!token,
   });
 
-  const filtered = useMemo(() => {
+  const sections = useMemo(() => {
     const s = normalize(q.trim());
-    return (users.data ?? []).filter((u) => !s || normalize(`${u.prenom} ${u.nom} ${u.email} ${roleLabel(u.role)}`).includes(s));
+    const all = (users.data ?? []).filter((u) => !s || normalize(`${u.prenom} ${u.nom} ${u.email} ${roleLabel(u.role)}`).includes(s));
+    return BLOCK_ORDER.map((role) => {
+      const data = all.filter((u) => u.role === role).sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`));
+      const total = (users.data ?? []).filter((u) => u.role === role).length;
+      return { role, title: roleLabel(role).toUpperCase(), data, total };
+    }).filter((sec) => sec.total > 0 || !s);
   }, [users.data, q]);
 
   const save = useMutation({
@@ -98,9 +106,19 @@ export default function UsersAdmin() {
       <TextInput testID="users-search" value={q} onChangeText={setQ} placeholder="Rechercher un nom, email, rôle…" placeholderTextColor={colors.muted} style={styles.search} />
 
       {users.isLoading ? <ActivityIndicator color={colors.brandPrimary} style={{ marginTop: spacing.xxl }} /> : (
-        <FlatList
-          data={filtered}
+        <SectionList
+          sections={sections}
           keyExtractor={(u) => u.id}
+          stickySectionHeadersEnabled
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHead} testID={`users-block-${section.role}`}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <View style={styles.countPill}><Text style={styles.countTxt}>{section.total} inscrit{section.total > 1 ? "s" : ""}</Text></View>
+            </View>
+          )}
+          renderSectionFooter={({ section }) => section.data.length === 0 ? (
+            <Text style={styles.emptyBlock}>Aucun compte dans ce bloc</Text>
+          ) : <View style={{ height: spacing.sm }} />}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xl }]}
           refreshControl={<RefreshControl refreshing={users.isRefetching} onRefresh={() => users.refetch()} tintColor={colors.brandPrimary} />}
           renderItem={({ item: u }) => (
@@ -179,6 +197,11 @@ const styles = StyleSheet.create({
   addTxt: { color: colors.onBrandPrimary, fontWeight: "700" },
   search: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, minHeight: 48, backgroundColor: colors.surfaceSecondary, color: colors.onSurface },
   list: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, paddingVertical: spacing.sm, marginTop: spacing.sm, borderBottomWidth: 2, borderBottomColor: colors.brandPrimary },
+  sectionTitle: { color: colors.brandPrimary, fontWeight: "800", fontSize: 13, letterSpacing: 1.2 },
+  countPill: { backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
+  countTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 12 },
+  emptyBlock: { color: colors.muted, fontSize: 12, fontStyle: "italic", paddingVertical: spacing.sm },
   row: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
   avatarTxt: { color: colors.onBrandTertiary, fontWeight: "700" },
