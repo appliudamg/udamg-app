@@ -13,9 +13,11 @@ export default function IntroSplash() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [videoDone, setVideoDone] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const navigated = useRef(false);
 
   const onVideoDone = useCallback(() => setVideoDone(true), []);
+  const onPlaying = useCallback(() => setPlaying(true), []);
 
   // Sécurité : ne jamais bloquer l'utilisateur sur l'intro.
   useEffect(() => {
@@ -31,8 +33,9 @@ export default function IntroSplash() {
 
   return (
     <View style={styles.container} testID="splash-screen">
-      <IntroVideo onEnd={onVideoDone} onError={onVideoDone} />
+      <IntroVideo onEnd={onVideoDone} onError={onVideoDone} onPlaying={onPlaying} />
       <View style={[styles.overlay, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]} pointerEvents="box-none">
+        {playing && (
         <Pressable
           testID="splash-skip"
           onPress={() => setVideoDone(true)}
@@ -41,17 +44,18 @@ export default function IntroSplash() {
         >
           <Text style={styles.skipTxt}>Passer</Text>
         </Pressable>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.surfaceInverse },
+  container: { flex: 1, backgroundColor: colors.surface },
   overlay: { flex: 1, justifyContent: "flex-start", alignItems: "flex-end", paddingHorizontal: spacing.xl },
   skip: {
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)",
+    backgroundColor: "rgba(15,23,42,0.55)",
     minHeight: 44, justifyContent: "center",
   },
   skipTxt: { color: colors.onSurfaceInverse, fontWeight: "700", fontSize: 14 },

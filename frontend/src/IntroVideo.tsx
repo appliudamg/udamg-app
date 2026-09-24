@@ -5,10 +5,10 @@ import { useEvent } from "expo";
 
 const INTRO = require("../assets/video/intro.mp4");
 
-type Props = { onEnd: () => void; onError: () => void };
+type Props = { onEnd: () => void; onError: () => void; onPlaying?: () => void };
 
 /** Version native (iOS / Android) — expo-video avec son. */
-export function IntroVideo({ onEnd, onError }: Props) {
+export function IntroVideo({ onEnd, onError, onPlaying }: Props) {
   const player = useVideoPlayer(INTRO, (p) => {
     p.loop = false;
     p.muted = Platform.OS === "web";
@@ -21,7 +21,8 @@ export function IntroVideo({ onEnd, onError }: Props) {
       try { player.play(); } catch {}
     }
     if (status === "error") onError();
-  }, [status, isPlaying, player, onError]);
+    if (isPlaying) onPlaying?.();
+  }, [status, isPlaying, player, onError, onPlaying]);
 
   useEffect(() => {
     const sub = player.addListener("playToEnd", onEnd);

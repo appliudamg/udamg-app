@@ -3,10 +3,10 @@ import { Asset } from "expo-asset";
 
 const INTRO = require("../assets/video/intro.mp4");
 
-type Props = { onEnd: () => void; onError: () => void };
+type Props = { onEnd: () => void; onError: () => void; onPlaying?: () => void };
 
 /** Version web — balise <video> native : autoplay muet + playsInline (obligatoire sur iPhone/Safari). */
-export function IntroVideo({ onEnd, onError }: Props) {
+export function IntroVideo({ onEnd, onError, onPlaying }: Props) {
   const ref = useRef<HTMLVideoElement>(null);
   const uri = Asset.fromModule(INTRO).uri;
 
@@ -29,9 +29,10 @@ export function IntroVideo({ onEnd, onError }: Props) {
       preload="auto"
       onEnded={onEnd}
       onError={onError}
+      onPlaying={onPlaying}
       style={{
         position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
-        objectFit: "cover", backgroundColor: "#0F172A",
+        objectFit: "cover", backgroundColor: "#FFFFFF",
       }}
     />
   );
