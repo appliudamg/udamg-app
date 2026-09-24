@@ -14,6 +14,7 @@ from core import (
 import events
 import media
 import messaging
+from mailer import send_credentials_email
 
 RoleLiteral = Literal["admin", "equipe_technique", "pasteur", "missionnaire", "berger",
                       "leader", "ouvrier", "disciple", "membre"]
@@ -42,6 +43,11 @@ class UserUpdate(BaseModel):
     is_approved: Optional[bool] = None
     disabled: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=6, max_length=128)
+
+
+class UserSaved(PublicUser):
+    email_sent: bool = False
+    email_error: Optional[str] = None
 
 
 class PasswordChange(BaseModel):
@@ -148,7 +154,7 @@ def admin_list_users(_=Depends(admin_dep)):
     return [public_user(u) for u in rows]
 
 
-@api.post("/admin/users", response_model=PublicUser, status_code=201)
+@api.post("/admin/users", response_model=UserSaved, status_code=201)
 def admin_create_user(data: UserCreate, _=Depends(admin_dep)):
     email = data.email.strip().lower()
     if sb().table("users").select("id").eq("email", email).execute().data:
@@ -158,10 +164,12 @@ def admin_create_user(data: UserCreate, _=Depends(admin_dep)):
         "role": data.role, "password_hash": password_hash.hash(data.password or new_id()),
         "is_approved": True, "disabled": False, "created_at": now_iso(),
     }
-    return public_user(sb().table("users").insert(row).execute().data[0])
+    created = sb().table("users").insert(row).execute().data[0]
+    sent, err = send_credentials_email(created, data.password) if data.password else (False, "Aucun mot de passe fourni")
+    return UserSaved(**public_user(created).model_dump(), email_sent=sent, email_error=err)
 
 
-@api.patch("/admin/users/{uid}", response_model=PublicUser)
+@api.patch("/admin/users/{uid}", response_model=UserSaved)
 def admin_update_user(uid: str, data: UserUpdate, actor=Depends(admin_dep)):
     updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
     if uid == actor["id"]:
@@ -169,14 +177,16 @@ def admin_update_user(uid: str, data: UserUpdate, actor=Depends(admin_dep)):
             raise HTTPException(400, "Vous ne pouvez pas retirer votre propre rôle Admin")
         if updates.get("disabled"):
             raise HTTPException(400, "Vous ne pouvez pas désactiver votre propre compte")
-    if "password" in updates:
-        updates["password_hash"] = password_hash.hash(updates.pop("password"))
+    new_password = updates.pop("password", None)
+    if new_password:
+        updates["password_hash"] = password_hash.hash(new_password)
     if not updates:
         raise HTTPException(400, "Aucune modification")
     res = sb().table("users").update(updates).eq("id", uid).execute()
     if not res.data:
         raise HTTPException(404, "Utilisateur introuvable")
-    return public_user(res.data[0])
+    sent, err = send_credentials_email(res.data[0], new_password, reset=True) if new_password else (False, None)
+    return UserSaved(**public_user(res.data[0]).model_dump(), email_sent=sent, email_error=err)
 
 
 @api.delete("/admin/users/{uid}", status_code=204)
