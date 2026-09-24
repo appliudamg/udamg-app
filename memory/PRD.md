@@ -24,6 +24,10 @@
 | pasteur / missionnaire / berger | tout | ✗ | ✗ | gestion (pasteur = admin) | ✗ |
 | leader / ouvrier / disciple / membre | tout sauf Réunion Pasteur & Conseil élargi | ✗ | ✗ | consultation, pointage | ✗ |
 
+## Emails & notifications
+- **Brevo** (`backend/mailer.py`) : email d'accès automatique à la création d'un compte / réinitialisation du mot de passe (expéditeur appli.udamg@gmail.com, validé). Boutons App Store / Google Play activables via env `APP_STORE_URL` / `PLAY_STORE_URL` ; `EMAIL_SHOW_WEB_LINK=false` masque le lien web.
+- **Push** (`backend/push.py`, relais Emergent) : chaque message de la Messagerie déclenche une notification à tous les utilisateurs (lots de 100, non bloquant). Frontend : `src/push.ts` (enregistrement à chaque session), handlers dans `app/_layout.tsx`. `google-services.json` fourni (Firebase `udamg-app`, package `com.udamg.app`). `EMERGENT_PUSH_KEY=placeholder` (remplacé au déploiement Emergent). Ne fonctionne que dans un build natif (pas Expo Go / web).
+
 ## Comptes : voir `memory/test_credentials.md`
 ## Reste à faire
 - Supabase plan Pro actif, limite d'upload relevée ; les 3 médias historiques sont complets.
