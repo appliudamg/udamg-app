@@ -1,7 +1,11 @@
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
-export type Role = "pasteur" | "ouvrier" | "evangeliste";
-export type User = { id: string; email: string; nom: string; prenom: string; role: Role };
+export type Role = "pasteur" | "ouvrier" | "evangeliste" | "membre";
+export type User = {
+  id: string; email: string; nom: string; prenom: string; role: Role;
+  ville_id?: string | null; ville_nom?: string | null;
+  is_approved?: boolean; disabled?: boolean;
+};
 export type AuthResponse = { access_token: string; token_type: string; user: User };
 
 export type Ville = { id: string; nom: string; code_postal: string; pays: string; whatsapp_link?: string | null };
@@ -95,6 +99,19 @@ export const fmtDuration = (secs?: number | null): string => {
   return `${m}:${s}`;
 };
 
+export class ApiError extends Error {
+  status: number;
+  detail: any;
+  code?: string;
+  constructor(status: number, detail: any) {
+    const msg = typeof detail === "string" ? detail : (detail?.message || detail?.code || JSON.stringify(detail));
+    super(msg);
+    this.status = status;
+    this.detail = detail;
+    this.code = typeof detail === "object" ? detail?.code : undefined;
+  }
+}
+
 export async function api<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     ...options,
@@ -107,8 +124,7 @@ export async function api<T>(path: string, options: RequestInit = {}, token?: st
   const text = await res.text();
   const body = text ? JSON.parse(text) : {};
   if (!res.ok) {
-    const msg = body?.detail || `HTTP ${res.status}`;
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    throw new ApiError(res.status, body?.detail ?? `HTTP ${res.status}`);
   }
   return body as T;
 }

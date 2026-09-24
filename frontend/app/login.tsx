@@ -1,15 +1,16 @@
 import { useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
-  Platform, ActivityIndicator, ScrollView,
+  Platform, ActivityIndicator, ScrollView, Clipboard as RNClipboard,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Link, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Login() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, denied, clearDenied } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("admin@udamg.app");
@@ -17,6 +18,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [gLoading, setGLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const onSubmit = async () => {
     setError("");
@@ -47,6 +49,43 @@ export default function Login() {
       setGLoading(false);
     }
   };
+
+  const copyEmail = async () => {
+    if (!denied?.email) return;
+    try {
+      await Clipboard.setStringAsync(denied.email);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      try { (RNClipboard as any).setString?.(denied.email); } catch {}
+    }
+  };
+
+  // Access-denied screen (Google login for non-approved emails)
+  if (denied) {
+    return (
+      <View style={[deniedStyles.root, { paddingTop: insets.top + spacing.xxl }]}>
+        <View style={deniedStyles.iconWrap}><Text style={deniedStyles.icon}>🔒</Text></View>
+        <Text style={deniedStyles.title}>Accès refusé</Text>
+        <Text style={deniedStyles.msg}>{denied.message}</Text>
+        {!!denied.email && (
+          <View style={deniedStyles.emailBox}>
+            <Text style={deniedStyles.emailLabel}>Votre email</Text>
+            <Text testID="denied-email" style={deniedStyles.emailValue} selectable>{denied.email}</Text>
+            <Pressable testID="denied-copy" onPress={copyEmail} style={deniedStyles.copyBtn}>
+              <Text style={deniedStyles.copyTxt}>{copied ? "✓ Copié" : "Copier l'email"}</Text>
+            </Pressable>
+          </View>
+        )}
+        <Text style={deniedStyles.hint}>
+          Transmettez cet email à un responsable / pasteur pour être ajouté à l&apos;équipe UDAMG.
+        </Text>
+        <Pressable testID="denied-back" onPress={clearDenied} style={deniedStyles.backBtn}>
+          <Text style={deniedStyles.backTxt}>Réessayer avec un autre compte</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -184,3 +223,20 @@ const styles = StyleSheet.create({
   footerText: { color: colors.muted },
   footerLink: { color: colors.brandPrimary, fontWeight: "600" },
 });
+
+const deniedStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface, padding: spacing.xl, alignItems: "center" },
+  iconWrap: { width: 96, height: 96, borderRadius: 48, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: spacing.lg, marginTop: spacing.xl },
+  icon: { fontSize: 48 },
+  title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.md, textAlign: "center" },
+  msg: { fontSize: 15, color: colors.muted, textAlign: "center", lineHeight: 22, marginBottom: spacing.xl, paddingHorizontal: spacing.md },
+  emailBox: { width: "100%", backgroundColor: colors.surfaceSecondary, padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: "center", gap: spacing.md, marginBottom: spacing.lg },
+  emailLabel: { fontSize: 11, color: colors.muted, fontWeight: "700", letterSpacing: 1 },
+  emailValue: { fontSize: 15, color: colors.onSurface, fontWeight: "700" },
+  copyBtn: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.brandPrimary, borderRadius: radius.pill, minWidth: 160, alignItems: "center" },
+  copyTxt: { color: colors.onBrandPrimary, fontWeight: "700", fontSize: 13 },
+  hint: { fontSize: 13, color: colors.muted, textAlign: "center", lineHeight: 20, marginBottom: spacing.xl, paddingHorizontal: spacing.md },
+  backBtn: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, minHeight: 48, alignItems: "center", justifyContent: "center" },
+  backTxt: { color: colors.onSurface, fontWeight: "700", fontSize: 14 },
+});
+

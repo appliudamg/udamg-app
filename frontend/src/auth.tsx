@@ -3,7 +3,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { api, AuthResponse, User } from "./api";
+import { api, ApiError, AuthResponse, User } from "./api";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -24,10 +24,14 @@ const storage = {
       : SecureStore.deleteItemAsync(TOKEN_KEY),
 };
 
+type AccessDenied = { code: string; email?: string; message: string };
+
 type AuthCtx = {
   user: User | null;
   token: string | null;
   loading: boolean;
+  denied: AccessDenied | null;
+  clearDenied: () => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, nom: string, prenom: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -46,7 +50,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState<AccessDenied | null>(null);
   const usedIds = useRef<Set<string>>(new Set());
+
+  const clearDenied = () => setDenied(null);
+
+  const captureDenied = (e: unknown) => {
+    if (e instanceof ApiError && e.status === 403 && typeof e.detail === "object" && e.detail?.code === "email_not_approved") {
+      setDenied({
+        code: e.detail.code,
+        email: e.detail.email,
+        message: e.detail.message || "Votre email n'a pas accès à l'application.",
+      });
+      return true;
+    }
+    return false;
+  };
 
   const save = async (r: AuthResponse) => {
     await storage.set(r.access_token);
@@ -94,7 +113,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               } catch {}
               setLoading(false);
               return;
-            } catch {}
+            } catch (e) {
+              captureDenied(e);
+              try {
+                const url = new URL(window.location.href);
+                url.hash = "";
+                url.searchParams.delete("session_id");
+                window.history.replaceState(window.history.state, "", url.toString());
+              } catch {}
+            }
           }
         } else {
           const initial = await Linking.getInitialURL();
@@ -104,7 +131,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await exchangeSession(sid);
               setLoading(false);
               return;
-            } catch {}
+            } catch (e) {
+              captureDenied(e);
+            }
           }
         }
         const saved = await storage.get();
@@ -124,19 +153,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const r = await api<AuthResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    await save(r);
+    try {
+      const r = await api<AuthResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      await save(r);
+    } catch (e) {
+      if (captureDenied(e)) return;
+      throw e;
+    }
   };
 
   const register = async (email: string, password: string, nom: string, prenom: string) => {
-    const r = await api<AuthResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password, nom, prenom }),
-    });
-    await save(r);
+    try {
+      const r = await api<AuthResponse>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password, nom, prenom }),
+      });
+      await save(r);
+    } catch (e) {
+      if (captureDenied(e)) return;
+      throw e;
+    }
   };
 
   const loginWithGoogle = async () => {
@@ -149,7 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-    // Try result.url first, then captured deep link, then initial URL
     let url: string | null = null;
     // @ts-ignore  - type differs by platform
     if (result?.type === "success" && result.url) url = result.url;
@@ -157,7 +195,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!url) url = await Linking.getInitialURL();
     const sid = extractSessionId(url);
     if (!sid) throw new Error("Connexion Google annulée");
-    await exchangeSession(sid);
+    try {
+      await exchangeSession(sid);
+    } catch (e) {
+      if (captureDenied(e)) return;
+      throw e;
+    }
   };
 
   const logout = async () => {
@@ -167,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout }}>
+    <Ctx.Provider value={{ user, token, loading, denied, clearDenied, login, register, loginWithGoogle, logout }}>
       {children}
     </Ctx.Provider>
   );

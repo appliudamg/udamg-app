@@ -13,6 +13,8 @@ export default function MenuPrincipal() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const isPasteur = user?.role === "pasteur";
+  const isMembre = user?.role === "membre";
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -20,6 +22,9 @@ export default function MenuPrincipal() {
         <View>
           <Text style={styles.hello}>Bonjour {user?.prenom}</Text>
           <Text style={styles.title}>Menu Principal</Text>
+          {!!user?.ville_nom && (
+            <Text style={styles.ville}>{user.ville_nom} · {roleLabel(user.role)}</Text>
+          )}
         </View>
         <Pressable
           testID="menu-profile-button"
@@ -38,6 +43,22 @@ export default function MenuPrincipal() {
       >
         <Text style={styles.slogan}>« Sauvé par Grâce pour Sauver »</Text>
 
+        {isPasteur && (
+          <Pressable
+            testID="menu-team-card"
+            onPress={() => router.push("/(app)/users")}
+            style={({ pressed }) => [styles.teamCard, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.teamIcon}>👥</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.teamTitle}>Équipe & Utilisateurs</Text>
+              <Text style={styles.teamSub}>Ajouter · Modifier · Attribuer un rôle et une église</Text>
+            </View>
+            <Text style={styles.teamChev}>›</Text>
+          </Pressable>
+        )}
+
+        {!isMembre && (
         <Pressable
           testID="menu-evangelisation-card"
           onPress={() => router.push("/(app)/evangelisation")}
@@ -57,7 +78,9 @@ export default function MenuPrincipal() {
             </View>
           </ImageBackground>
         </Pressable>
+        )}
 
+        {!isMembre && (
         <Pressable
           testID="menu-evenements-card"
           onPress={() => router.push("/(app)/evenements")}
@@ -77,6 +100,7 @@ export default function MenuPrincipal() {
             </View>
           </ImageBackground>
         </Pressable>
+        )}
 
         <Pressable
           testID="menu-medias-card"
@@ -100,6 +124,17 @@ export default function MenuPrincipal() {
       </ScrollView>
     </View>
   );
+}
+
+
+function roleLabel(role?: string): string {
+  switch (role) {
+    case "pasteur": return "Pasteur";
+    case "ouvrier": return "Ouvrier";
+    case "evangeliste": return "Évangéliste";
+    case "membre": return "Membre";
+    default: return "";
+  }
 }
 
 const styles = StyleSheet.create({
@@ -133,4 +168,14 @@ const styles = StyleSheet.create({
   cardEyebrow: { color: "#EFF6FF", fontSize: 12, fontWeight: "700", letterSpacing: 2 },
   cardTitle: { color: "#FFFFFF", fontSize: 30, fontWeight: "800" },
   cardSubtitle: { color: "#E2E8F0", fontSize: 13 },
+  ville: { color: colors.brandPrimary, fontSize: 12, fontWeight: "700", marginTop: 2 },
+  teamCard: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    backgroundColor: colors.surfaceSecondary, padding: spacing.lg, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  teamIcon: { fontSize: 28 },
+  teamTitle: { color: colors.onSurface, fontWeight: "800", fontSize: 15 },
+  teamSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  teamChev: { color: colors.muted, fontSize: 22 },
 });

@@ -1,0 +1,38 @@
+{
+  "summary": "Iter14 UDAMG multi-role users admin — backend 23/23 pytest passing (RBAC, admin/users CRUD, ville restrictions, membre gate, own-contacts scope, register disabled, Google session gate). Frontend flows validated on mobile viewport 390x844: pasteur sees menu-team-card + 3 pôles, membre sees ONLY Pôle 3 (no team-card, no Pôle 1/2), ouvrier sees 3 pôles without team-card. /users admin CRUD works end-to-end (create testfront membre → appears in list, deletion via API). All 4 seeded accounts login and expose ville_id/ville_nom/is_approved. Google /auth/session gate returns 401 for invalid session_id, source review confirms 403 email_not_approved for unknown emails. Registration disabled returns 403 with detail.code='registration_disabled'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecation warning: 'shadow*' style props are deprecated. Use 'boxShadow' (RN 0.79+). Non-blocking but should be migrated. Reference: e.g. /app/frontend/app/(app)/users.tsx (userCard shadow via colors.card shadow), /app/frontend/app/(app)/menu.tsx card style"},
+      {"component": "props.pointerEvents", "issue": "Deprecation warning: props.pointerEvents is deprecated. Use style.pointerEvents. Non-blocking, coming from a component (likely LinearGradient/absoluteFillObject overlay). Should be migrated."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter14_users_admin.py",
+    "/app/test_reports/pytest/pytest_iter14.xml"
+  ],
+  "action_items": [
+    "Optional: migrate remaining shadow* style props to boxShadow (RN 0.79) and props.pointerEvents to style.pointerEvents to silence deprecation warnings. Non-blocking.",
+    "No functional fixes required — iteration 14 complete."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~1600 lines and growing; consider splitting into modules (auth.py, users_admin.py, event_portal.py) for maintainability. Not urgent.",
+    "admin/users PATCH correctly handles ville_id migration when role changes to/from pasteur — logic looks solid.",
+    "google_session endpoint properly rejects unknown emails (403 email_not_approved) and disabled/non-approved existing users."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter14_users_admin.py (new)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% (all critical flows)"},
+  "seed_data_creation": "No permanent seed data. Test users TEST_* and testfront@udamg.app created during tests were cleaned up (verified 0 leftovers).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter14 introduced 4-role system (pasteur/ouvrier/evangeliste/membre), ville_id/ville_nom on users, /admin/users CRUD (pasteur-only), /auth/register disabled (403 code=registration_disabled), Google /auth/session gate (403 email_not_approved for unknown emails). Membre role = Pôle 3 media only; blocked on all Pôle 1 endpoints via _forbid_membre helper. Ouvrier/evangeliste scoped to their ville via scoped_ville() and see only own contacts (enregistre_par filter). Frontend menu.tsx filters cards by role; /users screen (users.tsx) provides pasteur CRUD UI with testIDs users-create/form-email/form-role-{role}/form-ville-{id}/form-submit/user-edit-{id}/user-del-{id}. Existing kewenagossa@gmail.com Google account (evangeliste, ville=None) is expected residue from prior migration — not a bug. Iteration 13 regression (video upload / audio range) not re-tested this iteration; test files still present under /app/backend/tests/.",
+  "rca_of_issue": ""
+}

@@ -50,7 +50,8 @@ logger = logging.getLogger("udamg")
 ROLE_PASTEUR = "pasteur"
 ROLE_OUVRIER = "ouvrier"
 ROLE_EVANGELISTE = "evangeliste"
-ROLES = {ROLE_PASTEUR, ROLE_OUVRIER, ROLE_EVANGELISTE}
+ROLE_MEMBRE = "membre"
+ROLES = {ROLE_PASTEUR, ROLE_OUVRIER, ROLE_EVANGELISTE, ROLE_MEMBRE}
 
 CATEGORIES = ["Mission JAC", "GÉDÉON", "CCMG"]
 
@@ -73,6 +74,10 @@ class PublicUser(BaseModel):
     nom: str
     prenom: str
     role: str
+    ville_id: Optional[str] = None
+    ville_nom: Optional[str] = None
+    is_approved: bool = True
+    disabled: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -248,8 +253,13 @@ app.add_middleware(
 # Auth helpers
 # --------------------------------------------------------------------------- #
 def public_user(u: dict) -> PublicUser:
-    return PublicUser(id=u["_id"], email=u["email"], nom=u.get("nom", ""),
-                      prenom=u.get("prenom", ""), role=u["role"])
+    return PublicUser(
+        id=u["_id"], email=u["email"], nom=u.get("nom", ""),
+        prenom=u.get("prenom", ""), role=u["role"],
+        ville_id=u.get("ville_id"), ville_nom=u.get("ville_nom"),
+        is_approved=u.get("is_approved", True),
+        disabled=u.get("disabled", False),
+    )
 
 
 def create_token(user: dict) -> str:
@@ -276,6 +286,8 @@ async def current_user(
     user = await app.state.db.users.find_one({"_id": payload["sub"], "disabled": False})
     if not user:
         raise unauthorized
+    if not user.get("is_approved", True):
+        raise HTTPException(403, "Compte en attente d'approbation par le Pasteur")
     return user
 
 
@@ -288,38 +300,28 @@ def require_role(*roles: str):
 
 
 def can_see_all(user: dict) -> bool:
-    return user["role"] in (ROLE_PASTEUR, ROLE_OUVRIER)
+    """Only Pasteur can see all contacts across all churches."""
+    return user["role"] == ROLE_PASTEUR
+
+
+def scoped_ville(user: dict) -> Optional[str]:
+    """Return ville_id restriction for the current user, or None if unrestricted (pasteur)."""
+    if user["role"] == ROLE_PASTEUR:
+        return None
+    return user.get("ville_id")
+
+
+def _forbid_membre(user: dict) -> None:
+    """Membre role has NO access to Pôle 1/2 endpoints."""
+    if user["role"] == ROLE_MEMBRE:
+        raise HTTPException(403, "Le rôle Membre n'a accès qu'au Pôle 3 (Médias)")
 
 
 # --------------------------------------------------------------------------- #
 # Seed data
 # --------------------------------------------------------------------------- #
 async def _seed(db):
-    # Pasteur admin
-    if not await db.users.find_one({"email": ADMIN_EMAIL}):
-        await db.users.insert_one({
-            "_id": str(uuid4()), "email": ADMIN_EMAIL, "nom": "UDAMG", "prenom": "Pasteur",
-            "password_hash": password_hash.hash(ADMIN_PASSWORD),
-            "role": ROLE_PASTEUR, "disabled": False, "created_at": datetime.now(timezone.utc),
-        })
-        logger.info("Pasteur seeded: %s", ADMIN_EMAIL)
-    else:
-        await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"role": ROLE_PASTEUR, "disabled": False}})
-
-    # Ouvrier + Evangéliste demo
-    for email, role, nom, prenom, pw in [
-        ("ouvrier@udamg.app", ROLE_OUVRIER, "Martin", "Sophie", "OuvrierUdamg2026!"),
-        ("evangeliste@udamg.app", ROLE_EVANGELISTE, "Dupont", "Jean", "EvangUdamg2026!"),
-        ("membre@udamg.app", ROLE_EVANGELISTE, "Bernard", "Luc", "MembreUdamg2026!"),
-    ]:
-        if not await db.users.find_one({"email": email}):
-            await db.users.insert_one({
-                "_id": str(uuid4()), "email": email, "nom": nom, "prenom": prenom,
-                "password_hash": password_hash.hash(pw), "role": role,
-                "disabled": False, "created_at": datetime.now(timezone.utc),
-            })
-
-    # Églises officielles CCMG (15)
+    # Ensure "Angers" ville exists first (needed for ville_id defaults on seeded staff accounts)
     OFFICIAL_CCMG = [
         "CCMG Angers", "CCMG Brest", "CCMG Châteaubriant", "CCMG La Roche sur Yon",
         "CCMG La Rochelle", "CCMG Le Mans", "CCMG Morlaix", "CCMG Nantes",
@@ -329,10 +331,51 @@ async def _seed(db):
     existing_villes = {v["nom"]: v for v in await db.villes.find({}).to_list(500)}
     for nom in OFFICIAL_CCMG:
         if nom not in existing_villes:
-            await db.villes.insert_one({
-                "_id": str(uuid4()), "nom": nom, "code_postal": "", "pays": "France",
-                "whatsapp_link": None,
+            new_v = {"_id": str(uuid4()), "nom": nom, "code_postal": "", "pays": "France", "whatsapp_link": None}
+            await db.villes.insert_one(new_v)
+            existing_villes[nom] = new_v
+    angers_id = existing_villes.get("CCMG Angers", {}).get("_id")
+
+    # Pasteur admin (accès total, aucune ville — équivaut à "Toutes")
+    if not await db.users.find_one({"email": ADMIN_EMAIL}):
+        await db.users.insert_one({
+            "_id": str(uuid4()), "email": ADMIN_EMAIL, "nom": "UDAMG", "prenom": "Pasteur",
+            "password_hash": password_hash.hash(ADMIN_PASSWORD),
+            "role": ROLE_PASTEUR, "ville_id": None, "ville_nom": None,
+            "is_approved": True, "disabled": False,
+            "created_at": datetime.now(timezone.utc),
+        })
+        logger.info("Pasteur seeded: %s", ADMIN_EMAIL)
+    else:
+        await db.users.update_one(
+            {"email": ADMIN_EMAIL},
+            {"$set": {"role": ROLE_PASTEUR, "disabled": False, "is_approved": True, "ville_id": None, "ville_nom": None}},
+        )
+
+    # Comptes de démo: ouvrier + évangéliste + membre — tous rattachés à CCMG Angers
+    for email, role, nom, prenom, pw in [
+        ("ouvrier@udamg.app", ROLE_OUVRIER, "Martin", "Sophie", "OuvrierUdamg2026!"),
+        ("evangeliste@udamg.app", ROLE_EVANGELISTE, "Dupont", "Jean", "EvangUdamg2026!"),
+        ("membre@udamg.app", ROLE_MEMBRE, "Bernard", "Luc", "MembreUdamg2026!"),
+    ]:
+        if not await db.users.find_one({"email": email}):
+            await db.users.insert_one({
+                "_id": str(uuid4()), "email": email, "nom": nom, "prenom": prenom,
+                "password_hash": password_hash.hash(pw), "role": role,
+                "ville_id": angers_id, "ville_nom": "CCMG Angers",
+                "is_approved": True, "disabled": False,
+                "created_at": datetime.now(timezone.utc),
             })
+        else:
+            # Update existing seed accounts to have correct fields (idempotent migration)
+            await db.users.update_one(
+                {"email": email},
+                {"$set": {"role": role, "ville_id": angers_id, "ville_nom": "CCMG Angers",
+                          "is_approved": True, "disabled": False}},
+            )
+
+    # Backfill: any user without is_approved gets approved=True (existing users pre-feature)
+    await db.users.update_many({"is_approved": {"$exists": False}}, {"$set": {"is_approved": True}})
 
     # Programmes (sans obligation de code)
     if await db.programmes.count_documents({}) == 0:
@@ -374,17 +417,15 @@ async def root():
 # ---- Auth
 @api.post("/auth/register", response_model=TokenResponse, status_code=201)
 async def register(data: RegisterInput):
-    email = data.email.strip().lower()
-    user = {
-        "_id": str(uuid4()), "email": email, "nom": data.nom.strip(), "prenom": data.prenom.strip(),
-        "password_hash": password_hash.hash(data.password), "role": ROLE_EVANGELISTE,
-        "disabled": False, "created_at": datetime.now(timezone.utc),
-    }
-    try:
-        await app.state.db.users.insert_one(user)
-    except Exception:
-        raise HTTPException(409, "Email déjà utilisé")
-    return TokenResponse(access_token=create_token(user), user=public_user(user))
+    # Public self-registration is disabled — the Pasteur must invite via /admin/users.
+    raise HTTPException(
+        403,
+        detail={
+            "code": "registration_disabled",
+            "email": data.email.strip().lower(),
+            "message": "L'inscription publique est désactivée. Contactez un responsable pour obtenir l'accès à l'application UDAMG.",
+        },
+    )
 
 
 @api.post("/auth/login", response_model=TokenResponse)
@@ -395,6 +436,15 @@ async def login(data: Credentials):
     ok = password_hash.verify(data.password, stored)
     if not u or not ok:
         raise HTTPException(401, "Email ou mot de passe incorrect")
+    if not u.get("is_approved", True):
+        raise HTTPException(
+            403,
+            detail={
+                "code": "email_not_approved",
+                "email": email,
+                "message": "Votre compte n'a pas encore été approuvé par le Pasteur.",
+            },
+        )
     return TokenResponse(access_token=create_token(u), user=public_user(u))
 
 
@@ -487,6 +537,7 @@ async def list_contacts(
     context_type: str, context_id: str, categorie: Optional[str] = None,
     user=Depends(current_user),
 ):
+    _forbid_membre(user)
     if context_type not in ("ville", "programme", "GLOBAL"):
         raise HTTPException(400, "context_type invalide")
     query: dict = {}
@@ -494,6 +545,11 @@ async def list_contacts(
         if not can_see_all(user):
             raise HTTPException(403, "Vue globale réservée aux pasteurs")
     else:
+        # Restrict ouvrier/evangeliste to their assigned church
+        if context_type == "ville" and not can_see_all(user):
+            svid = scoped_ville(user)
+            if svid and context_id != svid:
+                raise HTTPException(403, "Vous ne pouvez consulter que votre église de rattachement")
         query["context_type"] = context_type
         query["context_id"] = context_id
     if categorie:
@@ -506,8 +562,14 @@ async def list_contacts(
 
 @api.post("/contacts", response_model=Contact, status_code=201)
 async def create_contact(data: ContactIn, user=Depends(current_user)):
+    _forbid_membre(user)
     if data.categorie not in CATEGORIES:
         raise HTTPException(400, f"Catégorie invalide (attendues: {CATEGORIES})")
+    # Enforce ville restriction on contact creation
+    if data.context_type == "ville" and not can_see_all(user):
+        svid = scoped_ville(user)
+        if svid and data.context_id != svid:
+            raise HTTPException(403, "Création limitée à votre église de rattachement")
     # Resolve context name
     context_nom = None
     if data.context_type == "ville":
@@ -766,6 +828,112 @@ async def global_stats(user=Depends(current_user)):
 
 
 # --------------------------------------------------------------------------- #
+# Admin — Users management (Pasteur only)
+# --------------------------------------------------------------------------- #
+class UserCreate(BaseModel):
+    email: EmailStr
+    nom: str = Field(min_length=1, max_length=80)
+    prenom: str = Field(min_length=1, max_length=80)
+    role: Literal["pasteur", "ouvrier", "evangeliste", "membre"]
+    ville_id: Optional[str] = None  # required for non-pasteur/non-membre
+    password: Optional[str] = None  # if provided → user can log in with email+password
+
+
+class UserUpdate(BaseModel):
+    nom: Optional[str] = None
+    prenom: Optional[str] = None
+    role: Optional[Literal["pasteur", "ouvrier", "evangeliste", "membre"]] = None
+    ville_id: Optional[str] = None
+    is_approved: Optional[bool] = None
+    disabled: Optional[bool] = None
+
+
+async def _resolve_ville_nom(db, ville_id: Optional[str]) -> Optional[str]:
+    if not ville_id: return None
+    v = await db.villes.find_one({"_id": ville_id})
+    return v["nom"] if v else None
+
+
+@api.get("/admin/users", response_model=List[PublicUser])
+async def admin_list_users(_=Depends(require_role(ROLE_PASTEUR))):
+    docs = await app.state.db.users.find({}, {"password_hash": 0}).sort("created_at", -1).to_list(2000)
+    return [public_user(d) for d in docs]
+
+
+@api.post("/admin/users", response_model=PublicUser, status_code=201)
+async def admin_create_user(data: UserCreate, _=Depends(require_role(ROLE_PASTEUR))):
+    db = app.state.db
+    email = data.email.strip().lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(409, "Un compte avec cet email existe déjà")
+    if data.role in (ROLE_OUVRIER, ROLE_EVANGELISTE) and not data.ville_id:
+        raise HTTPException(400, "Une église de rattachement est obligatoire pour ce rôle")
+    ville_nom = await _resolve_ville_nom(db, data.ville_id)
+    if data.ville_id and not ville_nom:
+        raise HTTPException(404, "Église introuvable")
+    doc = {
+        "_id": str(uuid4()), "email": email,
+        "nom": data.nom.strip(), "prenom": data.prenom.strip(),
+        "password_hash": password_hash.hash(data.password) if data.password else password_hash.hash(uuid4().hex),
+        "role": data.role,
+        "ville_id": data.ville_id if data.role != ROLE_PASTEUR else None,
+        "ville_nom": ville_nom if data.role != ROLE_PASTEUR else None,
+        "is_approved": True,
+        "disabled": False,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.users.insert_one(doc)
+    return public_user(doc)
+
+
+@api.patch("/admin/users/{uid}", response_model=PublicUser)
+async def admin_update_user(uid: str, data: UserUpdate, actor=Depends(require_role(ROLE_PASTEUR))):
+    db = app.state.db
+    existing = await db.users.find_one({"_id": uid})
+    if not existing:
+        raise HTTPException(404, "Utilisateur introuvable")
+    updates: dict = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+    # Prevent pasteur from disabling / demoting themselves out of pasteur
+    if uid == actor["_id"]:
+        if "role" in updates and updates["role"] != ROLE_PASTEUR:
+            raise HTTPException(400, "Vous ne pouvez pas retirer votre propre rôle Pasteur")
+        if "disabled" in updates and updates["disabled"]:
+            raise HTTPException(400, "Vous ne pouvez pas désactiver votre propre compte")
+    # Resolve ville_nom if ville_id changed
+    if "ville_id" in updates:
+        new_role = updates.get("role", existing["role"])
+        if new_role == ROLE_PASTEUR:
+            updates["ville_id"] = None
+            updates["ville_nom"] = None
+        else:
+            updates["ville_nom"] = await _resolve_ville_nom(db, updates["ville_id"])
+            if updates["ville_id"] and not updates["ville_nom"]:
+                raise HTTPException(404, "Église introuvable")
+    # If role changed to pasteur, wipe ville
+    if updates.get("role") == ROLE_PASTEUR:
+        updates["ville_id"] = None
+        updates["ville_nom"] = None
+    # If role changed to a scoped role and no ville, keep existing ville or require
+    if updates.get("role") in (ROLE_OUVRIER, ROLE_EVANGELISTE):
+        eff_v = updates.get("ville_id", existing.get("ville_id"))
+        if not eff_v:
+            raise HTTPException(400, "Une église de rattachement est requise pour ce rôle")
+    await db.users.update_one({"_id": uid}, {"$set": updates})
+    fresh = await db.users.find_one({"_id": uid})
+    return public_user(fresh)
+
+
+@api.delete("/admin/users/{uid}", status_code=204)
+async def admin_delete_user(uid: str, actor=Depends(require_role(ROLE_PASTEUR))):
+    if uid == actor["_id"]:
+        raise HTTPException(400, "Vous ne pouvez pas supprimer votre propre compte")
+    res = await app.state.db.users.delete_one({"_id": uid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Utilisateur introuvable")
+    return None
+
+
+# --------------------------------------------------------------------------- #
 # Google Auth (Emergent-managed)
 # --------------------------------------------------------------------------- #
 class SessionExchange(BaseModel):
@@ -799,25 +967,31 @@ async def google_session(data: SessionExchange):
 
     existing = await app.state.db.users.find_one({"email": email})
     if existing:
+        # Existing account — must be approved (pre-invited by pasteur or seeded)
+        if not existing.get("is_approved", True) or existing.get("disabled", False):
+            raise HTTPException(
+                403,
+                detail={
+                    "code": "email_not_approved",
+                    "email": email,
+                    "message": "Votre email n'a pas encore accès à l'application. Contactez un responsable pour être ajouté à l'équipe UDAMG.",
+                },
+            )
         await app.state.db.users.update_one(
             {"_id": existing["_id"]},
             {"$set": {"google_id": payload.get("id"), "picture": picture, "disabled": False}},
         )
         user = await app.state.db.users.find_one({"_id": existing["_id"]})
     else:
-        user = {
-            "_id": str(uuid4()),
-            "email": email,
-            "nom": nom or "—",
-            "prenom": prenom,
-            "password_hash": password_hash.hash(uuid4().hex),  # unusable local pwd
-            "role": ROLE_EVANGELISTE,
-            "google_id": payload.get("id"),
-            "picture": picture,
-            "disabled": False,
-            "created_at": datetime.now(timezone.utc),
-        }
-        await app.state.db.users.insert_one(user)
+        # Unknown email → NOT allowed. Only the Pasteur can invite via /admin/users.
+        raise HTTPException(
+            403,
+            detail={
+                "code": "email_not_approved",
+                "email": email,
+                "message": "Votre email n'est pas enregistré dans l'équipe UDAMG. Contactez un responsable pour obtenir l'accès à l'application.",
+            },
+        )
     return TokenResponse(access_token=create_token(user), user=public_user(user))
 
 
