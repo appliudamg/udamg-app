@@ -6,7 +6,7 @@
 ## Infrastructure (100 % comptes client)
 - **Supabase** (projet `olehhoovstiheycdarhs`, région eu-west-1) : Postgres (tables + RLS, schéma `supabase/migrations/001_init.sql`) + Storage (bucket privé `media`, bucket public `covers`). Backend FastAPI utilise `supabase-py` avec la clé service (client thread-local).
 - **Vercel** : projet `udamg-app` (team appliudamg) → https://udamg-app.vercel.app — web Expo exporté (`frontend/dist`) + fonction Python `api/index.py` (FastAPI). Env vars définies sur Vercel. Déploiement : `cd frontend && EXPO_PUBLIC_BACKEND_URL="" npx expo export -p web && cd .. && npx vercel deploy --prod`.
-- **GitHub** : `appliudamg/udamg-app` — push bloqué (token PAT sans permission *Contents: write*), branches locales `main` + `legacy-mongo` prêtes.
+- **GitHub** : `appliudamg/udamg-app` — branches `main` (Supabase) et `legacy-mongo` (archive) poussées. Les fichiers `.env` sont ignorés (push protection GitHub) ; modèle : `backend/.env.example`.
 - **Stripe / Brevo** : clés stockées dans `backend/.env` + Vercel env (aucune fonctionnalité demandée encore).
 - Plus AUCUNE dépendance MongoDB / Emergent Object Storage / Emergent Google Auth.
 
@@ -26,8 +26,7 @@
 
 ## Comptes : voir `memory/test_credentials.md`
 ## Reste à faire
-- Push GitHub dès que le token a la permission Contents (read & write).
-- Recopier l'audio « La parole de Dieu » (50 Mo) une fois la limite Storage relevée (plan Pro → Storage Settings → Upload file size limit).
+- Supabase plan Pro actif, limite d'upload relevée ; les 3 médias historiques sont complets.
 - Vérifier la vidéo d'intro sur appareil réel (H.264 non supporté par le Chromium headless de test).
 
 ---
