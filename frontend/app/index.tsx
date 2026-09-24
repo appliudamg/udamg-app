@@ -21,10 +21,22 @@ export default function IntroSplash() {
     p.loop = false;
     // Autoplay is only allowed muted on the web.
     p.muted = Platform.OS === "web";
-    p.play();
   });
 
   const { status } = useEvent(player, "statusChange", { status: player.status });
+  const { isPlaying } = useEvent(player, "playingChange", { isPlaying: player.playing });
+
+  // Lance la lecture dès que le lecteur est prêt (et réessaie après montage).
+  useEffect(() => {
+    if (status === "readyToPlay" && !isPlaying) {
+      try { player.play(); } catch {}
+    }
+  }, [status, isPlaying, player]);
+
+  useEffect(() => {
+    const t = setTimeout(() => { try { player.play(); } catch {} }, 300);
+    return () => clearTimeout(t);
+  }, [player]);
 
   useEffect(() => {
     const sub = player.addListener("playToEnd", () => setVideoDone(true));
@@ -56,7 +68,10 @@ export default function IntroSplash() {
         nativeControls={false}
         allowsPictureInPicture={false}
       />
-      <View style={[styles.overlay, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]} pointerEvents="box-none">
+      <Pressable
+        style={[styles.overlay, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}
+        onPress={() => { try { player.play(); } catch {} }}
+      >
         <Pressable
           testID="splash-skip"
           onPress={() => setVideoDone(true)}
@@ -69,14 +84,14 @@ export default function IntroSplash() {
           <Text style={styles.brand} testID="splash-app-name">UDAMG</Text>
           <Text style={styles.slogan} testID="splash-slogan">Sauvé par Grâce pour Sauver</Text>
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceInverse },
-  video: { ...StyleSheet.absoluteFill },
+  video: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
   overlay: { flex: 1, justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: spacing.xl },
   skip: {
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill,
