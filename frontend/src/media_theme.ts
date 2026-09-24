@@ -25,19 +25,18 @@ export const mediaTheme = {
 };
 
 export const categoryHue: Record<string, string> = {
-  "Foi & Méditation": "#134E4A",
-  "Leadership": "#4C1D95",
-  "Enseignements du Dimanche": "#7C2D12",
-  "Prières & Worship": "#B45309",
-  "Podcasts": "#0F766E",
-  "Livres Audio": "#991B1B",
+  culte_dimanche: "#7C2D12",
+  programmes: "#134E4A",
+  programmes_speciaux: "#B45309",
+  enseignements: "#4C1D95",
+  reunions: "#991B1B",
+  podcasts: "#0F766E",
+  story: "#BE185D",
 };
 
 export const kindLabel: Record<string, string> = {
   audio: "Audio",
   video: "Vidéo",
-  podcast: "Podcast",
-  livre: "Livre audio",
 };
 
 export const initialsOf = (title: string) =>

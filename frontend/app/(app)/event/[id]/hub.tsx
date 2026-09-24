@@ -6,6 +6,7 @@ import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
 import { EventDashboard } from "@/src/event-api";
 import { colors, spacing, radius } from "@/src/theme";
+import { canManageEvents } from "@/src/roles";
 
 export default function EventHub() {
   const insets = useSafeAreaInsets();
@@ -20,7 +21,7 @@ export default function EventHub() {
     refetchInterval: 8000,
   });
 
-  const isPastoral = user?.role === "pasteur" || user?.role === "ouvrier";
+  const isPastoral = canManageEvents(user?.role);
   const activeSession = data?.active_session;
 
   return (

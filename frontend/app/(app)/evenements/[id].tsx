@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, Evenement, Invitation, eventTypeLabel } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
+import { canAdminEvents } from "@/src/roles";
 
 const HERO_IMG = "https://images.unsplash.com/photo-1570786032462-2efc3ca8fccd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjaHVyY2glMjB3b3JzaGlwJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
 
@@ -96,7 +97,7 @@ export default function EventDetail() {
         </View>
       </ScrollView>
 
-      {user?.role === "pasteur" && (
+      {canAdminEvents(user?.role) && (
         <Pressable
           testID="event-invite-elders"
           onPress={() => router.push(`/(app)/evenements/${id}/invite`)}

@@ -13,6 +13,7 @@ import { api, Ville } from "@/src/api";
 import { CATEGORIES_AGE, EVENT_PROFILS, EventParticipant, profilColor } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
+import { canManageEvents, canAdminEvents } from "@/src/roles";
 
 const TABS = ["Tous", "Membre", "Inconnu", "Prospect Évangélisé", "Prospect Famille", "Externe"] as const;
 
@@ -128,8 +129,8 @@ export default function Inscrits() {
     }
   };
 
-  const isPastoral = user?.role === "pasteur" || user?.role === "ouvrier";
-  const isPasteur = user?.role === "pasteur";
+  const isPastoral = canManageEvents(user?.role);
+  const isPasteur = canAdminEvents(user?.role);
 
   const renderBackdrop = useCallback((props: any) => (
     <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.4} pressBehavior="close" />

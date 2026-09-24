@@ -14,7 +14,7 @@ export function MediaCard({
   layout?: "row" | "tile" | "hero";
   right?: React.ReactNode;
 }) {
-  const cover = item.cover_path ? mediaCoverUrl(item.id) : null;
+  const cover = mediaCoverUrl(item);
   const hue = categoryHue[item.category] || mediaTheme.violetDeep;
 
   if (layout === "tile") {
@@ -42,7 +42,7 @@ export function MediaCard({
       >
         {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFillObject} resizeMode="cover" /> : null}
         <View style={styles.heroOverlay}>
-          <Text style={styles.heroEyebrow}>{item.category.toUpperCase()}</Text>
+          <Text style={styles.heroEyebrow}>{item.category_label.toUpperCase()}{item.subcategory ? ` · ${item.subcategory.toUpperCase()}` : ""}</Text>
           <Text style={styles.heroTitle} numberOfLines={2}>{item.title}</Text>
           <Text style={styles.heroAuthor}>{item.author}</Text>
         </View>

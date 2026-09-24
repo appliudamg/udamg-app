@@ -11,6 +11,7 @@ import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api, Evenement, eventTypeLabel } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
+import { canManageEvents, canAdminEvents } from "@/src/roles";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -31,7 +32,7 @@ export default function EvenementsList() {
   const { token, user } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
-  const canCreate = user?.role === "pasteur" || user?.role === "ouvrier";
+  const canCreate = canManageEvents(user?.role);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [f, setF] = useState({
@@ -169,7 +170,7 @@ export default function EvenementsList() {
           }
           renderItem={({ item }) => {
             const d = new Date(item.date);
-            const isPasteur = user?.role === "pasteur";
+            const isPasteur = canAdminEvents(user?.role);
             return (
               <View style={styles.card} testID={`evenement-card-${item.id}`}>
                 <Pressable

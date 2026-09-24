@@ -1,5 +1,38 @@
 # UDAMG APP - PRD
 
+> **Itération 15 (juin 2026) — MIGRATION COMPLÈTE sur les comptes du client + nouvelle arborescence.**
+> Les sections plus bas décrivant l'Évangélisation / MongoDB / Google Auth sont HISTORIQUES (code archivé dans la branche git `legacy-mongo`).
+
+## Infrastructure (100 % comptes client)
+- **Supabase** (projet `olehhoovstiheycdarhs`, région eu-west-1) : Postgres (tables + RLS, schéma `supabase/migrations/001_init.sql`) + Storage (bucket privé `media`, bucket public `covers`). Backend FastAPI utilise `supabase-py` avec la clé service (client thread-local).
+- **Vercel** : projet `udamg-app` (team appliudamg) → https://udamg-app.vercel.app — web Expo exporté (`frontend/dist`) + fonction Python `api/index.py` (FastAPI). Env vars définies sur Vercel. Déploiement : `cd frontend && EXPO_PUBLIC_BACKEND_URL="" npx expo export -p web && cd .. && npx vercel deploy --prod`.
+- **GitHub** : `appliudamg/udamg-app` — push bloqué (token PAT sans permission *Contents: write*), branches locales `main` + `legacy-mongo` prêtes.
+- **Stripe / Brevo** : clés stockées dans `backend/.env` + Vercel env (aucune fonctionnalité demandée encore).
+- Plus AUCUNE dépendance MongoDB / Emergent Object Storage / Emergent Google Auth.
+
+## Arborescence actuelle
+- **Intro vidéo** au lancement (`app/index.tsx`, `assets/video/intro.mp4`, bouton Passer, sécurité 12 s).
+- **Espace Événements** : 1.1 Événements (portail complet : inscrits/badges EBED, scanner QR, séances, enfants, tableau Pasteur, exports CSV/PDF) · 1.2 **Messagerie** (diffusion unidirectionnelle ADMIN/ÉQUIPE TECHNIQUE → tous, badge non-lus sur le menu, suivi de lecture « En direct » avec listes Vu / Pas encore vu, polling 4 s).
+- **Media (audios/vidéos)** : Culte du dimanche · Programmes (UDAMG/CAMP/Autre) · Programmes spéciaux (Convention/Nuit de la bonne nouvelle/Autre) · Enseignements · Réunions (Réunion Pasteur/Conseil élargi) · Podcasts · Story. Upload = URL signée Supabase (PUT direct depuis le client, web + natif) puis `/confirm`. Lecture = `/api/media/{id}/file` → 307 vers URL signée (Range OK).
+- **Équipe & Utilisateurs** (admin) · **Profil** (droits, changement de mot de passe).
+
+## Rôles & droits (backend/core.py ↔ frontend/src/roles.ts)
+| Rôle | Media lecture | Media écriture | Messagerie envoi | Événements | Utilisateurs |
+|---|---|---|---|---|---|
+| admin | tout | ✗ | ✓ | gestion + admin | ✓ |
+| equipe_technique | tout | ✓ (seul) | ✓ | gestion | ✗ |
+| pasteur / missionnaire / berger | tout | ✗ | ✗ | gestion (pasteur = admin) | ✗ |
+| leader / ouvrier / disciple / membre | tout sauf Réunion Pasteur & Conseil élargi | ✗ | ✗ | consultation, pointage | ✗ |
+
+## Comptes : voir `memory/test_credentials.md`
+## Reste à faire
+- Push GitHub dès que le token a la permission Contents (read & write).
+- Recopier l'audio « La parole de Dieu » (50 Mo) une fois la limite Storage relevée (plan Pro → Storage Settings → Upload file size limit).
+- Vérifier la vidéo d'intro sur appareil réel (H.264 non supporté par le Chromium headless de test).
+
+---
+
+
 ## Vision
 Application mobile complète pour la communauté UDAMG — évangélisation + gestion d'événements avec pointage.
 

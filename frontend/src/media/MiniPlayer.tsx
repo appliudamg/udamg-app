@@ -12,7 +12,7 @@ export function MiniPlayer() {
   if (!current) return null;
 
   const pct = durationSec > 0 ? Math.min(1, Math.max(0, positionSec / durationSec)) : 0;
-  const coverUri = current.cover_path ? mediaCoverUrl(current.id) : null;
+  const coverUri = mediaCoverUrl(current);
   const hue = categoryHue[current.category] || mediaTheme.violetDeep;
 
   return (

@@ -12,6 +12,7 @@ import { api } from "@/src/api";
 import { EventDashboard, EventSession, PointageRecord } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
+import { canAdminEvents } from "@/src/roles";
 
 export default function Pasteur() {
   const insets = useSafeAreaInsets();
@@ -99,7 +100,7 @@ export default function Pasteur() {
     } finally { setBusyPdf(false); }
   };
 
-  const isPasteur = user?.role === "pasteur";
+  const isPasteur = canAdminEvents(user?.role);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>

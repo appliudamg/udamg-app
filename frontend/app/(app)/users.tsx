@@ -1,53 +1,41 @@
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, TextInput, FlatList, ActivityIndicator,
-  Modal, ScrollView, Alert, Platform, KeyboardAvoidingView,
+  View, Text, StyleSheet, Pressable, FlatList, TextInput, ActivityIndicator, Modal, ScrollView,
+  KeyboardAvoidingView, Platform, RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
-import { api, User, Role, Ville } from "@/src/api";
+import { api, ROLES, Role, User, roleLabel, normalize } from "@/src/api";
+import { useToast } from "@/src/toast";
+import { confirmAction } from "@/src/confirm";
 import { colors, spacing, radius } from "@/src/theme";
 
-const ROLE_LABELS: Record<Role, string> = {
-  pasteur: "Pasteur",
-  ouvrier: "Ouvrier",
-  evangeliste: "Évangéliste",
-  membre: "Membre",
-};
+type FormState = { email: string; nom: string; prenom: string; role: Role; password: string };
+const EMPTY: FormState = { email: "", nom: "", prenom: "", role: "membre", password: "" };
 
-const ROLE_COLORS: Record<Role, string> = {
-  pasteur: "#8B0000",
-  ouvrier: "#0369A1",
-  evangeliste: "#065F46",
-  membre: "#7C2D12",
-};
-
-const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  pasteur: "Accès total, toutes les églises",
-  ouvrier: "Accès Pôles 1-2-3 limité à son église",
-  evangeliste: "Accès Pôles 1-2-3, ses propres fiches",
-  membre: "Accès Pôle 3 uniquement (médias)",
-};
-
-type UserForm = {
-  email: string; prenom: string; nom: string; role: Role;
-  ville_id: string | null; password: string;
-};
-
-const emptyForm: UserForm = {
-  email: "", prenom: "", nom: "", role: "evangeliste", ville_id: null, password: "",
+const ROLE_HELP: Record<Role, string> = {
+  admin: "Accès total · gère les utilisateurs · envoie des messages",
+  equipe_technique: "Ajoute/modifie les médias · envoie des messages",
+  pasteur: "Tous les médias (y compris Réunions Pasteur / Conseil élargi)",
+  missionnaire: "Tous les médias (y compris Réunions)",
+  berger: "Tous les médias (y compris Réunions)",
+  leader: "Médias sauf Réunion Pasteur / Conseil élargi",
+  ouvrier: "Médias sauf Réunion Pasteur / Conseil élargi",
+  disciple: "Médias sauf Réunion Pasteur / Conseil élargi",
+  membre: "Médias sauf Réunion Pasteur / Conseil élargi",
 };
 
 export default function UsersAdmin() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { token, user: me } = useAuth();
+  const router = useRouter();
   const qc = useQueryClient();
+  const { show: toast } = useToast();
+  const { user: me, token } = useAuth();
   const [q, setQ] = useState("");
-  const [openForm, setOpenForm] = useState<null | { mode: "create" } | { mode: "edit"; user: User }>(null);
-  const [form, setForm] = useState<UserForm>(emptyForm);
+  const [open, setOpen] = useState<{ mode: "create" } | { mode: "edit"; user: User } | null>(null);
+  const [f, setF] = useState<FormState>(EMPTY);
 
   const users = useQuery({
     queryKey: ["admin", "users"],
@@ -55,345 +43,167 @@ export default function UsersAdmin() {
     enabled: !!token,
   });
 
-  const villes = useQuery({
-    queryKey: ["villes"],
-    queryFn: () => api<Ville[]>("/villes", {}, token),
-    enabled: !!token,
-  });
+  const filtered = useMemo(() => {
+    const s = normalize(q.trim());
+    return (users.data ?? []).filter((u) => !s || normalize(`${u.prenom} ${u.nom} ${u.email} ${roleLabel(u.role)}`).includes(s));
+  }, [users.data, q]);
 
-  const filtered = (users.data ?? []).filter((u) => {
-    const s = q.trim().toLowerCase();
-    if (!s) return true;
-    return (u.email + " " + u.prenom + " " + u.nom).toLowerCase().includes(s);
-  });
-
-  const openCreate = () => {
-    setForm(emptyForm);
-    setOpenForm({ mode: "create" });
-  };
-
-  const openEdit = (u: User) => {
-    setForm({
-      email: u.email, prenom: u.prenom, nom: u.nom,
-      role: u.role, ville_id: u.ville_id || null, password: "",
-    });
-    setOpenForm({ mode: "edit", user: u });
-  };
-
-  const closeForm = () => setOpenForm(null);
-
-  const saveMut = useMutation({
+  const save = useMutation({
     mutationFn: async () => {
-      if (!openForm) return;
-      if (openForm.mode === "create") {
+      if (!open) return;
+      if (open.mode === "create") {
         return api<User>("/admin/users", {
           method: "POST",
-          body: JSON.stringify({
-            email: form.email.trim().toLowerCase(),
-            prenom: form.prenom.trim(),
-            nom: form.nom.trim(),
-            role: form.role,
-            ville_id: form.role === "pasteur" ? null : form.ville_id,
-            password: form.password || undefined,
-          }),
+          body: JSON.stringify({ email: f.email.trim(), nom: f.nom.trim(), prenom: f.prenom.trim(), role: f.role, password: f.password || null }),
         }, token);
       }
-      const body: any = {
-        prenom: form.prenom.trim(),
-        nom: form.nom.trim(),
-        role: form.role,
-      };
-      if (form.role !== "pasteur") body.ville_id = form.ville_id;
-      return api<User>(`/admin/users/${openForm.user.id}`, {
+      return api<User>(`/admin/users/${open.user.id}`, {
         method: "PATCH",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ nom: f.nom.trim(), prenom: f.prenom.trim(), role: f.role, ...(f.password ? { password: f.password } : {}) }),
       }, token);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "users"] });
-      closeForm();
-    },
+    onSuccess: () => { toast("Utilisateur enregistré ✓"); setOpen(null); qc.invalidateQueries({ queryKey: ["admin", "users"] }); },
+    onError: (e: any) => toast(e?.message || "Erreur"),
   });
 
-  const deleteMut = useMutation({
-    mutationFn: (uid: string) => api(`/admin/users/${uid}`, { method: "DELETE" }, token),
+  const toggle = useMutation({
+    mutationFn: (u: User) => api<User>(`/admin/users/${u.id}`, { method: "PATCH", body: JSON.stringify({ disabled: !u.disabled }) }, token),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
+    onError: (e: any) => toast(e?.message || "Erreur"),
   });
 
-  const askDelete = (u: User) => {
-    const msg = `Supprimer définitivement ${u.prenom} ${u.nom} (${u.email}) ?`;
-    const doIt = () => deleteMut.mutate(u.id);
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm(msg)) doIt();
-      return;
-    }
-    Alert.alert("Confirmer", msg, [
-      { text: "Annuler", style: "cancel" },
-      { text: "Supprimer", style: "destructive", onPress: doIt },
-    ]);
-  };
+  const remove = useMutation({
+    mutationFn: (u: User) => api(`/admin/users/${u.id}`, { method: "DELETE" }, token),
+    onSuccess: () => { toast("Utilisateur supprimé"); qc.invalidateQueries({ queryKey: ["admin", "users"] }); },
+    onError: (e: any) => toast(e?.message || "Erreur"),
+  });
 
-  const submitDisabled =
-    !form.email.trim() || !form.prenom.trim() || !form.nom.trim() ||
-    ((form.role === "ouvrier" || form.role === "evangeliste") && !form.ville_id);
+  const openCreate = () => { setF(EMPTY); setOpen({ mode: "create" }); };
+  const openEdit = (u: User) => { setF({ email: u.email, nom: u.nom, prenom: u.prenom, role: u.role, password: "" }); setOpen({ mode: "edit", user: u }); };
+  const confirmDelete = (u: User) => confirmAction("Supprimer ce compte ?", `${u.prenom} ${u.nom} (${u.email})`, () => remove.mutate(u));
+
+  const valid = f.nom.trim() && f.prenom.trim() && (open?.mode === "edit" || (f.email.includes("@") && f.password.length >= 6));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable testID="users-back" onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
-        </Pressable>
+        <Pressable testID="users-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}><Text style={styles.backTxt}>‹</Text></Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>ADMIN</Text>
           <Text style={styles.title}>Équipe & Utilisateurs</Text>
+          <Text style={styles.sub}>{users.data?.length ?? 0} compte(s)</Text>
         </View>
-        <Pressable testID="users-create" onPress={openCreate} style={styles.newBtn}>
-          <Text style={styles.newTxt}>+ Ajouter</Text>
-        </Pressable>
+        <Pressable testID="users-add" onPress={openCreate} style={styles.addBtn}><Text style={styles.addTxt}>+ Ajouter</Text></Pressable>
       </View>
 
-      <View style={styles.searchWrap}>
-        <TextInput
-          testID="users-search"
-          value={q}
-          onChangeText={setQ}
-          placeholder="Rechercher email, nom, prénom"
-          placeholderTextColor={colors.muted}
-          style={styles.search}
-        />
-      </View>
+      <TextInput testID="users-search" value={q} onChangeText={setQ} placeholder="Rechercher un nom, email, rôle…" placeholderTextColor={colors.muted} style={styles.search} />
 
-      {users.isLoading ? (
-        <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View>
-      ) : (
+      {users.isLoading ? <ActivityIndicator color={colors.brandPrimary} style={{ marginTop: spacing.xxl }} /> : (
         <FlatList
           data={filtered}
           keyExtractor={(u) => u.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: insets.bottom + spacing.xxl }}
-          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-          renderItem={({ item }) => (
-            <View style={styles.userCard} testID={`user-card-${item.id}`}>
-              <View style={[styles.avatar, { backgroundColor: ROLE_COLORS[item.role] || colors.brandPrimary }]}>
-                <Text style={styles.avatarTxt}>{(item.prenom[0] || "?") + (item.nom[0] || "")}</Text>
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.uName} numberOfLines={1}>{item.prenom} {item.nom}</Text>
-                <Text style={styles.uMail} numberOfLines={1}>{item.email}</Text>
-                <View style={styles.uMeta}>
-                  <View style={[styles.rolePill, { backgroundColor: ROLE_COLORS[item.role] + "22", borderColor: ROLE_COLORS[item.role] }]}>
-                    <Text style={[styles.rolePillTxt, { color: ROLE_COLORS[item.role] }]}>{ROLE_LABELS[item.role]}</Text>
-                  </View>
-                  {!!item.ville_nom && (
-                    <Text style={styles.villeChip}>· {item.ville_nom}</Text>
-                  )}
-                  {item.role === "pasteur" && (
-                    <Text style={styles.villeChip}>· Toutes les églises</Text>
-                  )}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xl }]}
+          refreshControl={<RefreshControl refreshing={users.isRefetching} onRefresh={() => users.refetch()} tintColor={colors.brandPrimary} />}
+          renderItem={({ item: u }) => (
+            <View style={[styles.row, u.disabled && { opacity: 0.55 }]} testID={`user-row-${u.id}`}>
+              <View style={styles.avatar}><Text style={styles.avatarTxt}>{(u.prenom?.[0] || "") + (u.nom?.[0] || "")}</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{u.prenom} {u.nom} {u.id === me?.id ? "(vous)" : ""}</Text>
+                <Text style={styles.email}>{u.email}</Text>
+                <View style={styles.pillRow}>
+                  <View style={styles.pill}><Text style={styles.pillTxt}>{roleLabel(u.role)}</Text></View>
+                  {u.disabled && <View style={[styles.pill, styles.pillOff]}><Text style={[styles.pillTxt, { color: colors.onError }]}>Désactivé</Text></View>}
                 </View>
               </View>
-              <View style={{ gap: 6 }}>
-                <Pressable testID={`user-edit-${item.id}`} onPress={() => openEdit(item)} style={styles.iconBtn}>
-                  <Text style={styles.iconTxt}>✎</Text>
-                </Pressable>
-                {item.id !== me?.id && (
-                  <Pressable testID={`user-del-${item.id}`} onPress={() => askDelete(item)} style={[styles.iconBtn, { backgroundColor: "#FEE2E2" }]}>
-                    <Text style={[styles.iconTxt, { color: colors.error }]}>×</Text>
-                  </Pressable>
+              <View style={styles.actions}>
+                <Pressable testID={`user-edit-${u.id}`} onPress={() => openEdit(u)} style={styles.actBtn}><Text style={styles.actTxt}>Modifier</Text></Pressable>
+                {u.id !== me?.id && (
+                  <>
+                    <Pressable testID={`user-toggle-${u.id}`} onPress={() => toggle.mutate(u)} style={styles.actBtn}><Text style={styles.actTxt}>{u.disabled ? "Activer" : "Désactiver"}</Text></Pressable>
+                    <Pressable testID={`user-delete-${u.id}`} onPress={() => confirmDelete(u)} style={styles.actBtn}><Text style={[styles.actTxt, { color: colors.error }]}>Supprimer</Text></Pressable>
+                  </>
                 )}
               </View>
             </View>
           )}
-          ListEmptyComponent={<Text style={styles.empty}>Aucun utilisateur trouvé.</Text>}
         />
       )}
 
-      <Modal visible={!!openForm} transparent animationType="slide" onRequestClose={closeForm}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalBg}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {openForm?.mode === "create" ? "Nouvel utilisateur" : "Modifier"}
-              </Text>
-              <Pressable onPress={closeForm} hitSlop={8}><Text style={{ fontSize: 24 }}>×</Text></Pressable>
+      <Modal visible={!!open} animationType="slide" onRequestClose={() => setOpen(null)}>
+        <KeyboardAvoidingView style={styles.modal} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView contentContainerStyle={[styles.modalScroll, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalHead}>
+              <Text style={styles.modalTitle}>{open?.mode === "create" ? "Nouvel utilisateur" : "Modifier l'utilisateur"}</Text>
+              <Pressable testID="user-form-cancel" onPress={() => setOpen(null)} hitSlop={8}><Text style={styles.cancel}>Annuler</Text></Pressable>
             </View>
-            <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }} keyboardShouldPersistTaps="handled">
-              <Field label="Email">
-                <TextInput
-                  testID="form-email"
-                  value={form.email}
-                  onChangeText={(t) => setForm({ ...form, email: t })}
-                  editable={openForm?.mode === "create"}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  placeholder="exemple@udamg.app"
-                  placeholderTextColor={colors.muted}
-                  style={[styles.input, openForm?.mode === "edit" && { opacity: 0.6 }]}
-                />
-              </Field>
 
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <View style={{ flex: 1 }}>
-                  <Field label="Prénom">
-                    <TextInput testID="form-prenom" value={form.prenom} onChangeText={(t) => setForm({ ...form, prenom: t })}
-                      placeholder="Prénom" placeholderTextColor={colors.muted} style={styles.input} />
-                  </Field>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Nom">
-                    <TextInput testID="form-nom" value={form.nom} onChangeText={(t) => setForm({ ...form, nom: t })}
-                      placeholder="Nom" placeholderTextColor={colors.muted} style={styles.input} />
-                  </Field>
-                </View>
-              </View>
+            <Text style={styles.label}>Prénom</Text>
+            <TextInput testID="user-form-prenom" value={f.prenom} onChangeText={(t) => setF({ ...f, prenom: t })} style={styles.input} placeholder="Prénom" placeholderTextColor={colors.muted} />
+            <Text style={styles.label}>Nom</Text>
+            <TextInput testID="user-form-nom" value={f.nom} onChangeText={(t) => setF({ ...f, nom: t })} style={styles.input} placeholder="Nom" placeholderTextColor={colors.muted} />
+            <Text style={styles.label}>Email</Text>
+            <TextInput testID="user-form-email" value={f.email} editable={open?.mode === "create"} onChangeText={(t) => setF({ ...f, email: t })} style={[styles.input, open?.mode === "edit" && { opacity: 0.6 }]} autoCapitalize="none" keyboardType="email-address" placeholder="email@exemple.com" placeholderTextColor={colors.muted} />
+            <Text style={styles.label}>{open?.mode === "create" ? "Mot de passe (min. 6 caractères)" : "Nouveau mot de passe (optionnel)"}</Text>
+            <TextInput testID="user-form-password" value={f.password} onChangeText={(t) => setF({ ...f, password: t })} style={styles.input} secureTextEntry placeholder="••••••••" placeholderTextColor={colors.muted} />
 
-              <Field label="Rôle">
-                <View style={{ gap: 8 }}>
-                  {(["pasteur", "ouvrier", "evangeliste", "membre"] as Role[]).map((r) => (
-                    <Pressable
-                      key={r}
-                      testID={`form-role-${r}`}
-                      onPress={() => setForm({ ...form, role: r, ville_id: r === "pasteur" ? null : form.ville_id })}
-                      style={[styles.roleRow, form.role === r && { borderColor: ROLE_COLORS[r], backgroundColor: ROLE_COLORS[r] + "11" }]}
-                    >
-                      <View style={[styles.roleDot, { backgroundColor: ROLE_COLORS[r] }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.roleName}>{ROLE_LABELS[r]}</Text>
-                        <Text style={styles.roleDesc}>{ROLE_DESCRIPTIONS[r]}</Text>
-                      </View>
-                      {form.role === r && <Text style={{ color: ROLE_COLORS[r], fontSize: 18, fontWeight: "800" }}>✓</Text>}
-                    </Pressable>
-                  ))}
-                </View>
-              </Field>
+            <Text style={styles.label}>Rôle</Text>
+            <View style={styles.roles}>
+              {ROLES.map((r) => {
+                const on = f.role === r.value;
+                return (
+                  <Pressable key={r.value} testID={`role-${r.value}`} onPress={() => setF({ ...f, role: r.value })} style={[styles.roleChip, on && styles.roleChipOn]}>
+                    <Text style={[styles.roleTxt, on && styles.roleTxtOn]}>{r.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.help}>{ROLE_HELP[f.role]}</Text>
 
-              {(form.role === "ouvrier" || form.role === "evangeliste" || form.role === "membre") && (
-                <Field label={`Église${form.role === "membre" ? " (optionnelle)" : " *"}`}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-                    {form.role === "membre" && (
-                      <Pressable
-                        onPress={() => setForm({ ...form, ville_id: null })}
-                        style={[styles.villePick, form.ville_id === null && styles.villePickOn]}
-                      >
-                        <Text style={[styles.villePickTxt, form.ville_id === null && { color: "#FFF" }]}>Aucune</Text>
-                      </Pressable>
-                    )}
-                    {(villes.data ?? []).map((v) => (
-                      <Pressable
-                        key={v.id}
-                        testID={`form-ville-${v.id}`}
-                        onPress={() => setForm({ ...form, ville_id: v.id })}
-                        style={[styles.villePick, form.ville_id === v.id && styles.villePickOn]}
-                      >
-                        <Text style={[styles.villePickTxt, form.ville_id === v.id && { color: "#FFF" }]}>{v.nom}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </Field>
-              )}
-
-              {openForm?.mode === "create" && (
-                <Field label="Mot de passe (optionnel — sinon connexion Google uniquement)">
-                  <TextInput
-                    testID="form-password"
-                    value={form.password}
-                    onChangeText={(t) => setForm({ ...form, password: t })}
-                    secureTextEntry
-                    placeholder="Laisser vide pour connexion Google seulement"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
-                  />
-                </Field>
-              )}
-
-              {!!saveMut.error && (
-                <Text style={styles.error}>{(saveMut.error as Error).message}</Text>
-              )}
-
-              <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
-                <Pressable onPress={closeForm} style={[styles.btn, styles.btnGrey]}>
-                  <Text style={styles.btnGreyTxt}>Annuler</Text>
-                </Pressable>
-                <Pressable
-                  testID="form-submit"
-                  onPress={() => saveMut.mutate()}
-                  disabled={submitDisabled || saveMut.isPending}
-                  style={[styles.btn, styles.btnPrimary, (submitDisabled || saveMut.isPending) && { opacity: 0.5 }]}
-                >
-                  {saveMut.isPending
-                    ? <ActivityIndicator color="#FFF" />
-                    : <Text style={styles.btnPrimaryTxt}>{openForm?.mode === "create" ? "Créer" : "Enregistrer"}</Text>
-                  }
-                </Pressable>
-              </View>
-            </ScrollView>
-          </View>
+            <Pressable testID="user-form-save" disabled={!valid || save.isPending} onPress={() => save.mutate()} style={({ pressed }) => [styles.cta, (!valid || pressed || save.isPending) && { opacity: 0.7 }]}>
+              {save.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.ctaTxt}>Enregistrer</Text>}
+            </Pressable>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (<View style={{ gap: 6 }}><Text style={styles.label}>{label}</Text>{children}</View>);
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
-  backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
-  eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
-  title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
-  newBtn: { paddingHorizontal: spacing.md, height: 36, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  newTxt: { color: colors.onBrandPrimary, fontSize: 13, fontWeight: "800" },
-  searchWrap: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
-  search: {
-    backgroundColor: colors.surfaceSecondary, borderRadius: radius.md,
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderWidth: 1, borderColor: colors.border,
-    color: colors.onSurface, minHeight: 48,
-  },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  empty: { textAlign: "center", color: colors.muted, marginTop: spacing.xxl },
-  userCard: {
-    flexDirection: "row", alignItems: "center", gap: spacing.md,
-    backgroundColor: colors.surfaceSecondary, padding: spacing.md, borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  avatarTxt: { color: "#FFF", fontWeight: "900", fontSize: 14 },
-  uName: { color: colors.onSurface, fontWeight: "700", fontSize: 14 },
-  uMail: { color: colors.muted, fontSize: 12, marginTop: 1 },
-  uMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" },
-  rolePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
-  rolePillTxt: { fontSize: 11, fontWeight: "800" },
-  villeChip: { color: colors.muted, fontSize: 11 },
-  iconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  iconTxt: { fontSize: 16, color: colors.onSurface, fontWeight: "700" },
-  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "92%" },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
-  label: { color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md, minHeight: 48,
-    backgroundColor: colors.surfaceSecondary, color: colors.onSurface, fontSize: 14,
-  },
-  roleRow: {
-    flexDirection: "row", alignItems: "center", gap: spacing.md,
-    padding: spacing.md, borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary,
-  },
-  roleDot: { width: 10, height: 10, borderRadius: 5 },
-  roleName: { color: colors.onSurface, fontWeight: "800", fontSize: 14 },
-  roleDesc: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  villePick: { paddingHorizontal: 14, height: 32, borderRadius: 999, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  villePickOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  villePickTxt: { color: colors.onSurface, fontWeight: "700", fontSize: 12 },
-  error: { color: colors.error, fontSize: 13, textAlign: "center" },
-  btn: { flex: 1, minHeight: 48, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
-  btnGrey: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
-  btnGreyTxt: { color: colors.onSurfaceSecondary, fontWeight: "700" },
-  btnPrimary: { backgroundColor: colors.brandPrimary },
-  btnPrimaryTxt: { color: colors.onBrandPrimary, fontWeight: "800" },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
+  backTxt: { fontSize: 28, color: colors.onSurface, lineHeight: 30 },
+  title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
+  sub: { fontSize: 12, color: colors.muted },
+  addBtn: { backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.lg, minHeight: 44, justifyContent: "center", borderRadius: radius.pill },
+  addTxt: { color: colors.onBrandPrimary, fontWeight: "700" },
+  search: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, minHeight: 48, backgroundColor: colors.surfaceSecondary, color: colors.onSurface },
+  list: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  row: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  avatarTxt: { color: colors.onBrandTertiary, fontWeight: "700" },
+  name: { color: colors.onSurface, fontWeight: "700", fontSize: 15 },
+  email: { color: colors.muted, fontSize: 12 },
+  pillRow: { flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" },
+  pill: { backgroundColor: colors.brandTertiary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill },
+  pillOff: { backgroundColor: colors.error },
+  pillTxt: { color: colors.onBrandTertiary, fontSize: 11, fontWeight: "700" },
+  actions: { justifyContent: "center", gap: 2 },
+  actBtn: { minHeight: 32, justifyContent: "center", paddingHorizontal: spacing.sm },
+  actTxt: { color: colors.brandPrimary, fontWeight: "600", fontSize: 12 },
+  modal: { flex: 1, backgroundColor: colors.surface },
+  modalScroll: { paddingHorizontal: spacing.xl, gap: spacing.xs },
+  modalHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
+  modalTitle: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
+  cancel: { color: colors.brandPrimary, fontWeight: "600", padding: spacing.sm },
+  label: { fontSize: 13, fontWeight: "600", color: colors.onSurfaceSecondary, marginTop: spacing.md },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.surfaceSecondary, color: colors.onSurface, fontSize: 16, minHeight: 52 },
+  roles: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs },
+  roleChip: { paddingHorizontal: spacing.md, minHeight: 40, justifyContent: "center", borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  roleChipOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  roleTxt: { color: colors.onSurfaceSecondary, fontWeight: "600", fontSize: 13 },
+  roleTxtOn: { color: colors.onBrandPrimary },
+  help: { color: colors.muted, fontSize: 12, marginTop: spacing.sm, fontStyle: "italic" },
+  cta: { backgroundColor: colors.brandPrimary, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center", marginTop: spacing.xl },
+  ctaTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 16 },
 });

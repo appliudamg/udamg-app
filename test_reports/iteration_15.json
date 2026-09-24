@@ -1,0 +1,49 @@
+{
+  "summary": "Iter15 UDAMG Supabase migration — backend 30/30 pytest passing (auth 4 roles, admin users CRUD RBAC, media taxonomy + RBAC restrictions, Supabase Storage upload/PUT/confirm/signed-URL redirect flow, membre 403 on restricted item and hidden from /media list, favorites/progress/playlists, messaging broadcast + read tracking + delete, events full lifecycle including public inscription EBED- badge, sessions, pointages ok→already, enfants counter, dashboard, CSV+PDF exports, event cascade delete). Frontend web-preview @390x844: admin sees all 4 menu cards (Équipe & Utilisateurs, Événements, Messagerie, Media); compose→send broadcast works and shows 0/N read counter; detail screen shows 'Suivi de lecture · En direct · 0 / 9 personnes' with Vu/Pas encore vu tabs; profile-logout works. Membre correctly has no team card, no compose button; message detail marks as ✓ Vu after opening; Media discover has no 'Réunions' chip. Technique media/admin console shows all 7 category chips + audio/video kind + fichier audio picker. Pasteur discover shows 'Réunions' chip (has access to Réunion Pasteur / Conseil élargi). All TEST_ rows cleaned up (0 leftovers). 3 existing media items and PG MJAC event preserved.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "shared Supabase client (core.sb)", "issue": "Supabase python client (httpx-based, sync) is NOT thread-safe under FastAPI's threadpool when concurrent requests hit the same PostgREST connection — reproducible when running pytest with -n 2 xdist workers: multiple endpoints (POST /messages, POST /playlists, POST /event/pointages, GET /media/{id}/file etc.) return 500 with `httpx.RemoteProtocolError: Server disconnected`. Sequential (-n 0) runs are 100% green. Recommend: use a per-request/thread-local supabase client, or serialize with a lock, or switch to supabase-py async client."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "messages compose modal", "issue": "'Diffuser le message' button (testID compose-send) is below the fold on iPhone-SE viewport (390x844) with the on-screen keyboard covering the ScrollView bottom — Playwright had to scrollIntoView + JS-click to press it. On real device with keyboard open, KeyboardAvoidingView may not push the button high enough. Ensure the modal ScrollView has enough contentContainerStyle padding-bottom and scrolls to the CTA when body TextInput is focused.", "testID": "compose-send", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' still emitted (RN 0.79+). Non-blocking. Reference: /app/frontend/app/(app)/* (multiple screens)."},
+      {"component": "props.pointerEvents", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' still emitted (likely from LinearGradient / absoluteFillObject overlays). Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter15_supabase_migration.py",
+    "/app/test_reports/pytest/pytest_iter15.xml"
+  ],
+  "action_items": [
+    "(low) Investigate Supabase python client thread-safety. Wrap sb() as thread-local or use asyncio version to eliminate httpx.RemoteProtocolError under load. Currently only affects concurrent requests (multi-user real-world OK but perf risk).",
+    "(medium) Fix compose modal CTA visibility on small screens: after focusing the multiline 'body' TextInput, ensure 'compose-send' auto-scrolls into view; consider sticky footer with the CTA outside the KeyboardAvoidingView ScrollView, or increase paddingBottom to insets.bottom + 200.",
+    "(low) Migrate remaining shadow* style props to boxShadow (RN 0.79) and props.pointerEvents to style.pointerEvents to silence deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py + core.py + media.py + messaging.py + events.py split is clean (server.py 195 lines, media.py 434, events.py 529). Roles/permissions centralized in core.py (MEDIA_WRITE_ROLES, MEDIA_FULL_READ_ROLES, MESSAGE_SEND_ROLES, EVENT_MANAGE_ROLES, EVENT_ADMIN_ROLES). Good.",
+    "media.py list_media() correctly filters restricted items via visible() helper; get_media() and media_file() both return 403 when non-privileged role hits a Réunion Pasteur / Conseil élargi item. /media/categories drops the restricted subcategory list per-role. Verified end-to-end.",
+    "media.py create_upload_url / confirm_upload flow uses Supabase Storage create_signed_upload_url + client PUT + server-side confirm — correct approach avoiding router-side buffering. Old file cleanup on re-upload works (best-effort try/except).",
+    "media.py media_file() returns 307 RedirectResponse to signed Supabase URL with 6h TTL — good for streaming. Auth is via ?token= query param (needed for <video>/<audio> src), decoded via user_from_token — validated.",
+    "messaging.py broadcast pattern is simple + correct: recipients = all approved+enabled users, counts computed on-the-fly, /messages/{id}/reads returns sorted read/unread arrays. No pagination on message list (limit 200) — fine for now.",
+    "events.py public_inscription() has NO auth (as required for shareable form) but validates the profil against PROFILS and the event exists — safe. Badge_id increments per event via COUNT(*). Consider a small race window on high concurrency (two concurrent inserts could get same badge_id) — DB-side unique constraint on (evenement_id,badge_id) would harden.",
+    "admin_dep in server.py is scoped to USER_ADMIN_ROLES={admin} — correct. Both PATCH and DELETE guard against self-role-removal / self-disable / self-delete.",
+    "seed() in server.py is idempotent — only inserts missing seeded emails, and re-upserts role if it drifts. Won't clobber existing data. events.seed_villes() also idempotent.",
+    "core.public_user() excludes password_hash — good. But list_users (events.py) uses public_user which is fine, though returns all users to any authenticated caller (not just admin). Not a leak of sensitive fields but exposes the org roster to any role — consider restricting to management roles if needed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter15_supabase_migration.py (new)"
+  ],
+  "success_rate": {"backend": "100% (30/30 sequential)", "frontend": "100% of critical flows (login 4 roles, admin menu, compose+send+read-tracking, membre restrictions, technique admin console, pasteur discover chips)"},
+  "seed_data_creation": "None persistent. TEST_ITER15 users/messages/media/events/playlists created & cleaned up. Post-cleanup verified: 0 TEST_ messages, 0 TEST_ media, 0 TEST_ events, 0 TEST_ users. 3 existing media items and PG MJAC event preserved.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL: http://localhost:8001/api (also public https://church-connect-255.preview.emergentagent.com/api). 4 seeded accounts documented in /app/memory/test_credentials.md; DO NOT delete them or the 3 existing media items or the PG MJAC event. Supabase python client is NOT thread-safe — always run pytest with -n 0 for this suite (default pytest.ini uses -n 2 which will produce 500s). Reuse /app/backend/tests/test_iter15_supabase_migration.py for regression. All TEST_ITER15* data is auto-cleaned by tests. Frontend testIDs: login-email-input, login-password-input, login-submit-button, menu-team-card (admin only), menu-messages-card, menu-media-card, menu-evenements-card, menu-profile-button, messages-compose (sender roles only), compose-title, compose-body, compose-send, message-row-{id}, message-reads-{id}, media-admin, profile-logout. NOTE: compose-send button often lands below viewport on 390x844 — use scrollIntoView + JS click in Playwright or add sticky-CTA UX fix.",
+  "rca_of_issue": ""
+}

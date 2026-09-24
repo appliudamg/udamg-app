@@ -11,13 +11,14 @@ import { mediaTheme, categoryHue } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { usePlayer } from "@/src/player";
 import { BottomNav } from "@/src/media/BottomNav";
+import { canWriteMedia } from "@/src/roles";
 
 export default function MediaHome() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
   const player = usePlayer();
-  const canAdmin = user?.role === "pasteur" || user?.role === "ouvrier";
+  const canAdmin = canWriteMedia(user?.role);
 
   const media = useQuery({
     queryKey: ["media", "all"],
@@ -55,7 +56,7 @@ export default function MediaHome() {
           <Text style={styles.backTxt}>‹</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>PÔLE 3 · MÉDIAS</Text>
+          <Text style={styles.eyebrow}>UDAMG · MEDIA</Text>
           <Text style={styles.title}>Bonsoir {user?.prenom}</Text>
         </View>
         {canAdmin && (
@@ -112,7 +113,7 @@ export default function MediaHome() {
             <View key={cat} style={styles.catBlock}>
               <View style={styles.catHeader}>
                 <View style={[styles.catDot, { backgroundColor: categoryHue[cat] || mediaTheme.violet }]} />
-                <Text style={styles.catTitle}>{cat}</Text>
+                <Text style={styles.catTitle}>{items[0]?.category_label ?? cat}</Text>
               </View>
               <ScrollView
                 horizontal

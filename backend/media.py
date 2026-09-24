@@ -1,136 +1,88 @@
-"""
-Pôle 3 — Médias & Enseignements
-Registered on the main FastAPI app via `register_media(app, api, current_user, require_role, roles)`.
+"""Pôle Media (Audios / Vidéos) — Supabase Postgres + Supabase Storage."""
+from typing import List, Literal, Optional
 
-Uses Emergent Object Storage for audio + cover art.
-"""
-from __future__ import annotations
-
-import os
-import logging
-import mimetypes
-from datetime import datetime, timezone
-from typing import List, Optional
-from uuid import uuid4
-
-import requests
-import jwt
-from fastapi import (
-    APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request,
-)
-from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-logger = logging.getLogger("udamg.media")
+from core import (
+    MEDIA_WRITE_ROLES, RESTRICTED_SUBCATEGORIES, SUPABASE_URL,
+    can_read_restricted_media, current_user, new_id, now_iso, require_role, sb, user_from_token,
+)
 
-# --------------------------------------------------------------------------- #
-# Emergent Object Storage helpers
-# --------------------------------------------------------------------------- #
-STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
-STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
-EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
-APP_NAME = "udamg"
+router = APIRouter(prefix="/api")
 
-_storage_key: Optional[str] = None
+MEDIA_BUCKET = "media"
+COVER_BUCKET = "covers"
+SIGNED_URL_TTL = 6 * 3600
 
-
-def _init_storage() -> str:
-    global _storage_key
-    if _storage_key:
-        return _storage_key
-    if not EMERGENT_KEY:
-        raise RuntimeError("EMERGENT_LLM_KEY not set")
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
-    resp.raise_for_status()
-    _storage_key = resp.json()["storage_key"]
-    return _storage_key
-
-
-def _reset_key():
-    global _storage_key
-    _storage_key = None
-
-
-def _put_object(path: str, data: bytes, content_type: str) -> dict:
-    key = _init_storage()
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data, timeout=300,
-    )
-    if resp.status_code == 503:
-        _reset_key(); key = _init_storage()
-        resp = requests.put(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data, timeout=300,
-        )
-    if resp.status_code == 402:
-        raise HTTPException(402, "Crédits Emergent épuisés")
-    resp.raise_for_status()
-    return resp.json()
-
-
-def _get_object(path: str) -> tuple[bytes, str]:
-    key = _init_storage()
-    resp = requests.get(f"{STORAGE_URL}/objects/{path}",
-                        headers={"X-Storage-Key": key}, timeout=120)
-    if resp.status_code == 503:
-        _reset_key(); key = _init_storage()
-        resp = requests.get(f"{STORAGE_URL}/objects/{path}",
-                            headers={"X-Storage-Key": key}, timeout=120)
-    if resp.status_code >= 400:
-        raise HTTPException(404, "Fichier introuvable")
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
-
-
-async def init_storage_async():
-    try:
-        await run_in_threadpool(_init_storage)
-        logger.info("Object Storage initialised")
-    except Exception as e:
-        logger.warning("Object Storage init failed: %s", e)
-
-
-# --------------------------------------------------------------------------- #
-# Models
-# --------------------------------------------------------------------------- #
-MEDIA_CATEGORIES = [
-    "Foi & Méditation",
-    "Leadership",
-    "Enseignements du Dimanche",
-    "Prières & Worship",
-    "Podcasts",
-    "Livres Audio",
+TAXONOMY = [
+    {"key": "culte_dimanche", "label": "Culte du dimanche", "subcategories": []},
+    {"key": "programmes", "label": "Programmes", "subcategories": ["UDAMG", "CAMP", "Autre"]},
+    {"key": "programmes_speciaux", "label": "Programmes spéciaux",
+     "subcategories": ["Convention", "Nuit de la bonne nouvelle", "Autre"]},
+    {"key": "enseignements", "label": "Enseignements", "subcategories": []},
+    {"key": "reunions", "label": "Réunions", "subcategories": ["Réunion Pasteur", "Conseil élargi"]},
+    {"key": "podcasts", "label": "Podcasts", "subcategories": []},
+    {"key": "story", "label": "Story", "subcategories": []},
 ]
+CATEGORY_KEYS = {t["key"]: t for t in TAXONOMY}
+KINDS = ["audio", "video"]
 
-MEDIA_KINDS = ["audio", "video", "podcast", "livre"]
 
-
+# --------------------------------------------------------------------------- #
+# Modèles
+# --------------------------------------------------------------------------- #
 class MediaItem(BaseModel):
     id: str
     title: str
     author: str
     category: str
-    kind: str = "audio"
+    category_label: str
+    subcategory: Optional[str] = None
+    kind: str
     audio_path: Optional[str] = None
     cover_path: Optional[str] = None
-    duration: Optional[int] = None
+    cover_url: Optional[str] = None
+    duration: Optional[float] = None
     description: Optional[str] = None
     transcript: Optional[str] = None
-    created_at: datetime
+    created_at: str
     created_by: Optional[str] = None
+
+
+class MediaCreate(BaseModel):
+    title: str
+    author: str = ""
+    category: str
+    subcategory: Optional[str] = None
+    kind: Literal["audio", "video"] = "audio"
+    description: Optional[str] = None
+    transcript: Optional[str] = None
+    duration: Optional[float] = None
 
 
 class MediaUpdate(BaseModel):
     title: Optional[str] = None
     author: Optional[str] = None
     category: Optional[str] = None
-    kind: Optional[str] = None
+    subcategory: Optional[str] = None
+    kind: Optional[Literal["audio", "video"]] = None
     description: Optional[str] = None
     transcript: Optional[str] = None
-    duration: Optional[int] = None
+    duration: Optional[float] = None
+
+
+class UploadUrlRequest(BaseModel):
+    field: Literal["audio", "cover"]
+    filename: str
+    content_type: Optional[str] = None
+
+
+class ConfirmUpload(BaseModel):
+    field: Literal["audio", "cover"]
+    path: str
+    duration: Optional[float] = None
 
 
 class Playlist(BaseModel):
@@ -139,23 +91,17 @@ class Playlist(BaseModel):
     title: str
     description: Optional[str] = None
     item_ids: List[str] = []
-    updated_at: datetime
+    updated_at: str
 
 
-class PlaylistCreate(BaseModel):
+class PlaylistIn(BaseModel):
     title: str
     description: Optional[str] = None
 
 
-class PlaylistUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    item_ids: Optional[List[str]] = None
-
-
-class ProgressPayload(BaseModel):
+class ProgressIn(BaseModel):
     media_id: str
-    last_position_seconds: float
+    position_seconds: float
     completed: bool = False
 
 
@@ -163,509 +109,326 @@ class ProgressOut(BaseModel):
     media_id: str
     last_position_seconds: float
     completed: bool
-    updated_at: datetime
+    updated_at: str
 
 
-def _doc_to_media(d: dict) -> MediaItem:
+# --------------------------------------------------------------------------- #
+# Helpers
+# --------------------------------------------------------------------------- #
+def cover_public_url(path: Optional[str]) -> Optional[str]:
+    if not path:
+        return None
+    return f"{SUPABASE_URL}/storage/v1/object/public/{COVER_BUCKET}/{path}"
+
+
+def to_item(d: dict) -> MediaItem:
     return MediaItem(
-        id=d["_id"],
-        title=d["title"],
-        author=d["author"],
-        category=d["category"],
-        kind=d.get("kind", "audio"),
-        audio_path=d.get("audio_path"),
-        cover_path=d.get("cover_path"),
-        duration=d.get("duration"),
-        description=d.get("description"),
-        transcript=d.get("transcript"),
-        created_at=d.get("created_at", datetime.now(timezone.utc)),
-        created_by=d.get("created_by"),
+        id=d["id"], title=d["title"], author=d.get("author") or "",
+        category=d["category"], category_label=CATEGORY_KEYS.get(d["category"], {}).get("label", d["category"]),
+        subcategory=d.get("subcategory"), kind=d.get("kind", "audio"),
+        audio_path=d.get("audio_path"), cover_path=d.get("cover_path"),
+        cover_url=cover_public_url(d.get("cover_path")),
+        duration=d.get("duration"), description=d.get("description"), transcript=d.get("transcript"),
+        created_at=d["created_at"], created_by=d.get("created_by"),
     )
 
 
-def _now():
-    return datetime.now(timezone.utc)
+def is_restricted(d: dict) -> bool:
+    return (d.get("subcategory") or "") in RESTRICTED_SUBCATEGORIES
+
+
+def visible(d: dict, user: dict) -> bool:
+    return can_read_restricted_media(user) or not is_restricted(d)
+
+
+def get_media_or_404(mid: str) -> dict:
+    res = sb().table("media_items").select("*").eq("id", mid).limit(1).execute()
+    if not res.data:
+        raise HTTPException(404, "Média introuvable")
+    return res.data[0]
+
+
+def validate_taxonomy(category: str, subcategory: Optional[str]) -> Optional[str]:
+    tax = CATEGORY_KEYS.get(category)
+    if not tax:
+        raise HTTPException(400, f"Catégorie invalide : {category}")
+    if tax["subcategories"]:
+        if subcategory not in tax["subcategories"]:
+            raise HTTPException(400, f"Sous-catégorie requise pour « {tax['label']} » : {tax['subcategories']}")
+        return subcategory
+    return None
+
+
+def items_by_ids(ids: List[str], user: dict) -> List[MediaItem]:
+    if not ids:
+        return []
+    res = sb().table("media_items").select("*").in_("id", ids).execute()
+    by_id = {d["id"]: d for d in res.data if visible(d, user)}
+    return [to_item(by_id[i]) for i in ids if i in by_id]
 
 
 # --------------------------------------------------------------------------- #
-# Seed
+# Catalogue
 # --------------------------------------------------------------------------- #
-SEED_MEDIA = [
-    {"title": "La grâce qui transforme", "author": "Pasteur Marc",
-     "category": "Enseignements du Dimanche", "kind": "audio",
-     "description": "Un enseignement puissant sur l'œuvre de la grâce dans le cœur du croyant.",
-     "cover_hue": "#8B0000"},
-    {"title": "Diriger avec humilité", "author": "Pasteur Jean",
-     "category": "Leadership", "kind": "audio",
-     "description": "Les fondements bibliques du leadership serviteur.",
-     "cover_hue": "#5B21B6"},
-    {"title": "Prière du matin", "author": "Sœur Claire",
-     "category": "Prières & Worship", "kind": "audio",
-     "description": "5 minutes de méditation pour bien commencer la journée.",
-     "cover_hue": "#B45309"},
-    {"title": "Podcast — Foi & Vie #12", "author": "Équipe CCMG",
-     "category": "Podcasts", "kind": "podcast",
-     "description": "Discussion autour des questions des jeunes chrétiens.",
-     "cover_hue": "#0F766E"},
-    {"title": "Adoration — Louez l'Éternel", "author": "Chorale CCMG",
-     "category": "Prières & Worship", "kind": "audio",
-     "description": "Un moment de louange collective enregistré à Angers.",
-     "cover_hue": "#7C2D12"},
-    {"title": "Méditation sur le Psaume 23", "author": "Pasteur Marc",
-     "category": "Foi & Méditation", "kind": "audio",
-     "description": "L'Éternel est mon berger : je ne manquerai de rien.",
-     "cover_hue": "#134E4A"},
-    {"title": "Convention EBED 2025 — Session 1", "author": "Divers intervenants",
-     "category": "Enseignements du Dimanche", "kind": "audio",
-     "description": "Session d'ouverture de la convention nationale.",
-     "cover_hue": "#4C1D95"},
-    {"title": "Livre audio — Vivre par la foi", "author": "Auteur invité",
-     "category": "Livres Audio", "kind": "livre",
-     "description": "Chapitre 1 : les fondations de la marche par la foi.",
-     "cover_hue": "#991B1B"},
-]
+@router.get("/media/categories")
+def list_categories(user=Depends(current_user)):
+    tax = []
+    for t in TAXONOMY:
+        subs = [s for s in t["subcategories"] if can_read_restricted_media(user) or s not in RESTRICTED_SUBCATEGORIES]
+        if t["subcategories"] and not subs:
+            continue
+        tax.append({**t, "subcategories": subs})
+    return {"categories": tax, "kinds": KINDS, "can_write": user["role"] in MEDIA_WRITE_ROLES}
 
 
-async def seed_media(db):
-    """Idempotent: creates the demo media catalog only if empty."""
-    if await db.media_items.count_documents({}) > 0:
-        return
-    now = _now()
-    docs = []
-    for m in SEED_MEDIA:
-        docs.append({
-            "_id": str(uuid4()),
-            "title": m["title"],
-            "author": m["author"],
-            "category": m["category"],
-            "kind": m["kind"],
-            "audio_path": None,   # to be filled by admin upload
-            "cover_path": None,
-            "cover_hue": m["cover_hue"],  # fallback color for placeholder cover
-            "duration": None,
-            "description": m["description"],
-            "transcript": None,
-            "created_at": now,
-            "created_by": None,
-        })
-    if docs:
-        await db.media_items.insert_many(docs)
+@router.get("/media", response_model=List[MediaItem])
+def list_media(
+    q: Optional[str] = None, kind: Optional[str] = None,
+    category: Optional[str] = None, subcategory: Optional[str] = None,
+    limit: int = Query(200, le=500), user=Depends(current_user),
+):
+    qry = sb().table("media_items").select("*").order("created_at", desc=True).limit(limit)
+    if kind:
+        qry = qry.eq("kind", kind)
+    if category:
+        qry = qry.eq("category", category)
+    if subcategory:
+        qry = qry.eq("subcategory", subcategory)
+    if q:
+        s = q.replace(",", " ").strip()
+        qry = qry.or_(f"title.ilike.%{s}%,author.ilike.%{s}%,description.ilike.%{s}%")
+    return [to_item(d) for d in qry.execute().data if visible(d, user)]
+
+
+@router.get("/media/favorites/list", response_model=List[MediaItem])
+def list_favorites(user=Depends(current_user)):
+    res = sb().table("favorites").select("media_id").eq("user_id", user["id"]).order("created_at", desc=True).execute()
+    return items_by_ids([f["media_id"] for f in res.data], user)
+
+
+@router.get("/media/progress/list", response_model=List[ProgressOut])
+def list_progress(user=Depends(current_user)):
+    res = sb().table("user_progress").select("*").eq("user_id", user["id"]).execute()
+    return [ProgressOut(**{k: d[k] for k in ("media_id", "last_position_seconds", "completed", "updated_at")}) for d in res.data]
+
+
+@router.get("/media/progress/continue", response_model=List[MediaItem])
+def continue_listening(user=Depends(current_user)):
+    res = (sb().table("user_progress").select("media_id").eq("user_id", user["id"]).eq("completed", False)
+           .gt("last_position_seconds", 5).order("updated_at", desc=True).limit(10).execute())
+    return items_by_ids([p["media_id"] for p in res.data], user)
+
+
+@router.post("/media/progress", response_model=ProgressOut)
+def save_progress(data: ProgressIn, user=Depends(current_user)):
+    row = {"user_id": user["id"], "media_id": data.media_id, "last_position_seconds": max(0.0, data.position_seconds),
+           "completed": data.completed, "updated_at": now_iso()}
+    sb().table("user_progress").upsert(row, on_conflict="user_id,media_id").execute()
+    return ProgressOut(**{k: row[k] for k in ("media_id", "last_position_seconds", "completed", "updated_at")})
+
+
+@router.get("/media/{mid}", response_model=MediaItem)
+def get_media(mid: str, user=Depends(current_user)):
+    d = get_media_or_404(mid)
+    if not visible(d, user):
+        raise HTTPException(403, "Contenu réservé aux Pasteurs / Missionnaires / Bergers")
+    return to_item(d)
 
 
 # --------------------------------------------------------------------------- #
-# Registration
+# Écriture (Équipe technique)
 # --------------------------------------------------------------------------- #
-def register_media(app, api_router, current_user, require_role, roles):
-    """
-    Attach all media endpoints to the existing `api_router` (prefix /api).
+write_dep = require_role(*MEDIA_WRITE_ROLES)
 
-    - current_user, require_role: FastAPI dependency callables from server.py
-    - roles: dict with 'pasteur', 'ouvrier', 'evangeliste' role string constants
-    """
-    ROLE_PASTEUR = roles["pasteur"]
-    ROLE_OUVRIER = roles["ouvrier"]
 
-    # ============================== MEDIA CRUD ============================== #
-    @api_router.get("/media", response_model=List[MediaItem])
-    async def list_media(
-        request: Request,
-        category: Optional[str] = Query(None),
-        kind: Optional[str] = Query(None),
-        q: Optional[str] = Query(None),
-        limit: int = Query(200, le=500),
-        _=Depends(current_user),
-    ):
-        db = request.app.state.db
-        query: dict = {}
-        if category:
-            query["category"] = category
-        if kind:
-            query["kind"] = kind
-        if q:
-            query["$or"] = [
-                {"title": {"$regex": q, "$options": "i"}},
-                {"author": {"$regex": q, "$options": "i"}},
-                {"description": {"$regex": q, "$options": "i"}},
-            ]
-        docs = await db.media_items.find(query).sort("created_at", -1).to_list(limit)
-        return [_doc_to_media(d) for d in docs]
+@router.post("/media/create-json", response_model=MediaItem, status_code=201)
+def create_media(data: MediaCreate, user=Depends(write_dep)):
+    if not data.title.strip():
+        raise HTTPException(400, "Titre requis")
+    sub = validate_taxonomy(data.category, data.subcategory)
+    row = {
+        "id": new_id(), "title": data.title.strip(), "author": data.author.strip(),
+        "category": data.category, "subcategory": sub, "kind": data.kind,
+        "description": data.description, "transcript": data.transcript, "duration": data.duration,
+        "created_by": user["id"], "created_at": now_iso(),
+    }
+    res = sb().table("media_items").insert(row).execute()
+    return to_item(res.data[0])
 
-    @api_router.get("/media/categories")
-    async def media_categories(_=Depends(current_user)):
-        return {"categories": MEDIA_CATEGORIES, "kinds": MEDIA_KINDS}
 
-    @api_router.get("/media/{mid}", response_model=MediaItem)
-    async def get_media(mid: str, request: Request, _=Depends(current_user)):
-        d = await request.app.state.db.media_items.find_one({"_id": mid})
-        if not d:
-            raise HTTPException(404, "Média introuvable")
-        return _doc_to_media(d)
+@router.post("/media/{mid}/upload-url")
+def create_upload_url(mid: str, data: UploadUrlRequest, _=Depends(write_dep)):
+    """Génère une URL signée Supabase Storage ; le client envoie le fichier en PUT directement."""
+    get_media_or_404(mid)
+    ext = (data.filename.rsplit(".", 1)[-1].lower() if "." in data.filename else "bin")[:8]
+    bucket = MEDIA_BUCKET if data.field == "audio" else COVER_BUCKET
+    path = f"{mid}/{data.field}-{new_id()[:8]}.{ext}"
+    signed = sb().storage.from_(bucket).create_signed_upload_url(path)
+    return {"bucket": bucket, "path": path, "upload_url": signed["signed_url"], "token": signed["token"]}
 
-    @api_router.post("/media/create-json", response_model=MediaItem, status_code=201)
-    async def create_media_json(
-        request: Request,
-        data: dict,
-        user=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER)),
-    ):
-        """Create media WITHOUT files. Use POST /media/{id}/upload afterwards.
-        Preferred path for native clients where multipart with files is fragile."""
-        db = request.app.state.db
-        title = (data.get("title") or "").strip()
-        author = (data.get("author") or "").strip()
-        category = data.get("category") or ""
-        kind_ = data.get("kind") or "audio"
-        if not title or not author:
-            raise HTTPException(400, "Titre et orateur requis")
-        if category not in MEDIA_CATEGORIES:
-            raise HTTPException(400, f"Catégorie invalide (attendues: {MEDIA_CATEGORIES})")
-        if kind_ not in MEDIA_KINDS:
-            raise HTTPException(400, f"Type invalide (attendus: {MEDIA_KINDS})")
-        mid = str(uuid4())
-        doc = {
-            "_id": mid, "title": title, "author": author,
-            "category": category, "kind": kind_,
-            "audio_path": None, "cover_path": None,
-            "duration": data.get("duration"),
-            "description": (data.get("description") or "").strip() or None,
-            "transcript": (data.get("transcript") or "").strip() or None,
-            "created_at": _now(),
-            "created_by": user["_id"],
-        }
-        await db.media_items.insert_one(doc)
-        return _doc_to_media(doc)
 
-    @api_router.post("/media/{mid}/upload", response_model=MediaItem)
-    async def upload_media_file(
-        mid: str,
-        request: Request,
-        kind: str = Form(...),  # "audio" | "cover"
-        file: UploadFile = File(...),
-        _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER)),
-    ):
-        """Upload one file (audio OR cover) to an existing media entry.
-        Preferred path for native clients using FileSystem.uploadAsync (one file per call)."""
-        db = request.app.state.db
-        if kind not in ("audio", "cover"):
-            raise HTTPException(400, "kind doit être 'audio' ou 'cover'")
-        media = await db.media_items.find_one({"_id": mid})
-        if not media:
-            raise HTTPException(404, "Média introuvable")
-        data = await file.read()
-        if not data:
-            raise HTTPException(400, "Fichier vide")
-        ext = (file.filename or f"{kind}.bin").rsplit(".", 1)[-1].lower()[:5] or ("mp3" if kind == "audio" else "jpg")
-        path = f"{APP_NAME}/media/{mid}/{kind}.{ext}"
-        ct = file.content_type or mimetypes.guess_type(file.filename or "")[0] or (
-            "audio/mpeg" if kind == "audio" else "image/jpeg"
-        )
-        await run_in_threadpool(_put_object, path, data, ct)
-        field = "audio_path" if kind == "audio" else "cover_path"
-        await db.media_items.update_one({"_id": mid}, {"$set": {field: path}})
-        fresh = await db.media_items.find_one({"_id": mid})
-        return _doc_to_media(fresh)
-
-    @api_router.post("/media", response_model=MediaItem, status_code=201)
-    async def create_media(
-        request: Request,
-        title: str = Form(...),
-        author: str = Form(...),
-        category: str = Form(...),
-        kind: str = Form("audio"),
-        description: Optional[str] = Form(None),
-        transcript: Optional[str] = Form(None),
-        duration: Optional[int] = Form(None),
-        audio: Optional[UploadFile] = File(None),
-        cover: Optional[UploadFile] = File(None),
-        user=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER)),
-    ):
-        db = request.app.state.db
-        if category not in MEDIA_CATEGORIES:
-            raise HTTPException(400, f"Catégorie invalide (attendues: {MEDIA_CATEGORIES})")
-        if kind not in MEDIA_KINDS:
-            raise HTTPException(400, f"Type invalide (attendus: {MEDIA_KINDS})")
-
-        mid = str(uuid4())
-        audio_path = None
-        cover_path = None
-
-        if audio is not None:
-            audio_bytes = await audio.read()
-            if not audio_bytes:
-                raise HTTPException(400, "Fichier audio vide")
-            ext = (audio.filename or "audio.mp3").rsplit(".", 1)[-1].lower()[:5] or "mp3"
-            audio_path = f"{APP_NAME}/media/{mid}/audio.{ext}"
-            ct = audio.content_type or mimetypes.guess_type(audio.filename or "")[0] or "audio/mpeg"
-            await run_in_threadpool(_put_object, audio_path, audio_bytes, ct)
-
-        if cover is not None:
-            cover_bytes = await cover.read()
-            if cover_bytes:
-                ext = (cover.filename or "cover.jpg").rsplit(".", 1)[-1].lower()[:5] or "jpg"
-                cover_path = f"{APP_NAME}/media/{mid}/cover.{ext}"
-                ct = cover.content_type or mimetypes.guess_type(cover.filename or "")[0] or "image/jpeg"
-                await run_in_threadpool(_put_object, cover_path, cover_bytes, ct)
-
-        doc = {
-            "_id": mid, "title": title.strip(), "author": author.strip(),
-            "category": category, "kind": kind,
-            "audio_path": audio_path, "cover_path": cover_path,
-            "duration": duration, "description": description,
-            "transcript": transcript,
-            "created_at": _now(),
-            "created_by": user["_id"],
-        }
-        await db.media_items.insert_one(doc)
-        return _doc_to_media(doc)
-
-    @api_router.patch("/media/{mid}", response_model=MediaItem)
-    async def update_media(
-        mid: str,
-        data: MediaUpdate,
-        request: Request,
-        _=Depends(require_role(ROLE_PASTEUR, ROLE_OUVRIER)),
-    ):
-        db = request.app.state.db
-        existing = await db.media_items.find_one({"_id": mid})
-        if not existing:
-            raise HTTPException(404, "Média introuvable")
-        updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
-        if "category" in updates and updates["category"] not in MEDIA_CATEGORIES:
-            raise HTTPException(400, "Catégorie invalide")
-        if "kind" in updates and updates["kind"] not in MEDIA_KINDS:
-            raise HTTPException(400, "Type invalide")
-        if updates:
-            await db.media_items.update_one({"_id": mid}, {"$set": updates})
-        fresh = await db.media_items.find_one({"_id": mid})
-        return _doc_to_media(fresh)
-
-    @api_router.delete("/media/{mid}", status_code=204)
-    async def delete_media(mid: str, request: Request, _=Depends(require_role(ROLE_PASTEUR))):
-        db = request.app.state.db
-        res = await db.media_items.delete_one({"_id": mid})
-        if res.deleted_count == 0:
-            raise HTTPException(404, "Média introuvable")
-        # cascade: playlists, favorites, progress
-        await db.playlists.update_many({}, {"$pull": {"item_ids": mid}})
-        await db.favorites.delete_many({"media_id": mid})
-        await db.user_progress.delete_many({"media_id": mid})
-        return None
-
-    # ============================== FILE STREAM ============================== #
-    @api_router.get("/media/{mid}/file")
-    async def stream_media_file(
-        mid: str,
-        request: Request,
-        token: Optional[str] = Query(None),
-    ):
-        # accept either Bearer header (native) or ?token=... (web / iOS AVPlayer)
-        auth_hdr = request.headers.get("authorization") or ""
-        jwt_token = None
-        if auth_hdr.lower().startswith("bearer "):
-            jwt_token = auth_hdr.split(" ", 1)[1].strip()
-        if not jwt_token and token:
-            jwt_token = token
-        if not jwt_token:
-            raise HTTPException(401, "Token requis")
+@router.post("/media/{mid}/confirm", response_model=MediaItem)
+def confirm_upload(mid: str, data: ConfirmUpload, _=Depends(write_dep)):
+    d = get_media_or_404(mid)
+    bucket = MEDIA_BUCKET if data.field == "audio" else COVER_BUCKET
+    col = "audio_path" if data.field == "audio" else "cover_path"
+    old = d.get(col)
+    if old and old != data.path:
         try:
-            secret = os.environ["JWT_SECRET"]
-            jwt.decode(jwt_token, secret, algorithms=["HS256"], issuer=os.environ.get("JWT_ISSUER", "udamg-api"))
+            sb().storage.from_(bucket).remove([old])
         except Exception:
-            raise HTTPException(401, "Token invalide")
+            pass
+    updates = {col: data.path}
+    if data.duration is not None:
+        updates["duration"] = data.duration
+    res = sb().table("media_items").update(updates).eq("id", mid).execute()
+    return to_item(res.data[0])
 
-        d = await request.app.state.db.media_items.find_one({"_id": mid})
-        if not d or not d.get("audio_path"):
-            raise HTTPException(404, "Audio non disponible")
-        content, ctype = await run_in_threadpool(_get_object, d["audio_path"])
-        total = len(content)
 
-        # Handle HTTP Range requests (required by iOS AVPlayer / expo-audio for streaming)
-        range_header = request.headers.get("range") or request.headers.get("Range")
-        if range_header:
-            import re as _re
-            m = _re.match(r"bytes=(\d+)-(\d*)", range_header)
-            if m:
-                start = int(m.group(1))
-                end_s = m.group(2)
-                end = int(end_s) if end_s else total - 1
-                if start >= total:
-                    return Response(status_code=416, headers={"Content-Range": f"bytes */{total}"})
-                end = min(end, total - 1)
-                length = end - start + 1
-                return Response(
-                    content=content[start:end + 1],
-                    status_code=206,
-                    media_type=ctype,
-                    headers={
-                        "Content-Range": f"bytes {start}-{end}/{total}",
-                        "Accept-Ranges": "bytes",
-                        "Content-Length": str(length),
-                        "Cache-Control": "public, max-age=3600",
-                    },
-                )
+@router.patch("/media/{mid}", response_model=MediaItem)
+def update_media(mid: str, data: MediaUpdate, _=Depends(write_dep)):
+    d = get_media_or_404(mid)
+    updates = data.model_dump(exclude_unset=True)
+    if "category" in updates or "subcategory" in updates:
+        cat = updates.get("category", d["category"])
+        updates["category"] = cat
+        updates["subcategory"] = validate_taxonomy(cat, updates.get("subcategory", d.get("subcategory")))
+    if not updates:
+        return to_item(d)
+    res = sb().table("media_items").update(updates).eq("id", mid).execute()
+    return to_item(res.data[0])
 
-        return Response(
-            content=content,
-            media_type=ctype,
-            headers={
-                "Accept-Ranges": "bytes",
-                "Content-Length": str(total),
-                "Cache-Control": "public, max-age=3600",
-            },
-        )
 
-    @api_router.get("/media/{mid}/cover")
-    async def stream_media_cover(mid: str, request: Request):
-        d = await request.app.state.db.media_items.find_one({"_id": mid})
-        if not d or not d.get("cover_path"):
-            raise HTTPException(404, "Pochette non disponible")
-        content, ctype = await run_in_threadpool(_get_object, d["cover_path"])
-        return Response(content=content, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+@router.delete("/media/{mid}", status_code=204)
+def delete_media(mid: str, _=Depends(write_dep)):
+    d = get_media_or_404(mid)
+    for bucket, col in ((MEDIA_BUCKET, "audio_path"), (COVER_BUCKET, "cover_path")):
+        if d.get(col):
+            try:
+                sb().storage.from_(bucket).remove([d[col]])
+            except Exception:
+                pass
+    sb().table("media_items").delete().eq("id", mid).execute()
+    return None
 
-    # ============================== FAVORITES ============================== #
-    @api_router.get("/media/favorites/list", response_model=List[MediaItem])
-    async def list_favorites(request: Request, user=Depends(current_user)):
-        db = request.app.state.db
-        favs = await db.favorites.find({"user_id": user["_id"]}).to_list(500)
-        ids = [f["media_id"] for f in favs]
-        if not ids:
-            return []
-        docs = await db.media_items.find({"_id": {"$in": ids}}).to_list(500)
-        # preserve favorite order (most recent first)
-        order = {mid: i for i, mid in enumerate(ids)}
-        docs.sort(key=lambda d: order.get(d["_id"], 0))
-        return [_doc_to_media(d) for d in docs]
 
-    @api_router.post("/media/{mid}/favorite", status_code=201)
-    async def add_favorite(mid: str, request: Request, user=Depends(current_user)):
-        db = request.app.state.db
-        if not await db.media_items.find_one({"_id": mid}):
-            raise HTTPException(404, "Média introuvable")
-        await db.favorites.update_one(
-            {"user_id": user["_id"], "media_id": mid},
-            {"$set": {"user_id": user["_id"], "media_id": mid, "created_at": _now()}},
-            upsert=True,
-        )
-        return {"ok": True}
+# --------------------------------------------------------------------------- #
+# Lecture des fichiers (redirection vers Supabase Storage)
+# --------------------------------------------------------------------------- #
+@router.get("/media/{mid}/file")
+def media_file(mid: str, token: str = Query(...)):
+    user = user_from_token(token)
+    d = get_media_or_404(mid)
+    if not visible(d, user):
+        raise HTTPException(403, "Contenu réservé aux Pasteurs / Missionnaires / Bergers")
+    if not d.get("audio_path"):
+        raise HTTPException(404, "Aucun fichier pour ce média")
+    signed = sb().storage.from_(MEDIA_BUCKET).create_signed_url(d["audio_path"], SIGNED_URL_TTL)
+    return RedirectResponse(signed["signedURL"], status_code=307)
 
-    @api_router.delete("/media/{mid}/favorite", status_code=204)
-    async def del_favorite(mid: str, request: Request, user=Depends(current_user)):
-        await request.app.state.db.favorites.delete_one({"user_id": user["_id"], "media_id": mid})
-        return None
 
-    # ============================== PLAYLISTS ============================== #
-    def _pl_doc_to_model(d: dict) -> Playlist:
-        return Playlist(
-            id=d["_id"], user_id=d["user_id"], title=d["title"],
-            description=d.get("description"), item_ids=d.get("item_ids", []),
-            updated_at=d.get("updated_at", _now()),
-        )
+@router.get("/media/{mid}/stream-url")
+def media_stream_url(mid: str, user=Depends(current_user)):
+    d = get_media_or_404(mid)
+    if not visible(d, user):
+        raise HTTPException(403, "Contenu réservé aux Pasteurs / Missionnaires / Bergers")
+    if not d.get("audio_path"):
+        raise HTTPException(404, "Aucun fichier pour ce média")
+    signed = sb().storage.from_(MEDIA_BUCKET).create_signed_url(d["audio_path"], SIGNED_URL_TTL)
+    return {"url": signed["signedURL"], "expires_in": SIGNED_URL_TTL}
 
-    @api_router.get("/playlists", response_model=List[Playlist])
-    async def list_playlists(request: Request, user=Depends(current_user)):
-        docs = await request.app.state.db.playlists.find({"user_id": user["_id"]}).sort("updated_at", -1).to_list(200)
-        return [_pl_doc_to_model(d) for d in docs]
 
-    @api_router.get("/playlists/{pid}", response_model=Playlist)
-    async def get_playlist(pid: str, request: Request, user=Depends(current_user)):
-        d = await request.app.state.db.playlists.find_one({"_id": pid, "user_id": user["_id"]})
-        if not d:
-            raise HTTPException(404, "Playlist introuvable")
-        return _pl_doc_to_model(d)
+@router.get("/media/{mid}/cover")
+def media_cover(mid: str):
+    d = get_media_or_404(mid)
+    url = cover_public_url(d.get("cover_path"))
+    if not url:
+        raise HTTPException(404, "Pas de pochette")
+    return RedirectResponse(url, status_code=307)
 
-    @api_router.post("/playlists", response_model=Playlist, status_code=201)
-    async def create_playlist(data: PlaylistCreate, request: Request, user=Depends(current_user)):
-        doc = {
-            "_id": str(uuid4()), "user_id": user["_id"],
-            "title": data.title.strip() or "Sans titre",
-            "description": data.description, "item_ids": [],
-            "updated_at": _now(),
-        }
-        await request.app.state.db.playlists.insert_one(doc)
-        return _pl_doc_to_model(doc)
 
-    @api_router.patch("/playlists/{pid}", response_model=Playlist)
-    async def update_playlist(pid: str, data: PlaylistUpdate, request: Request, user=Depends(current_user)):
-        db = request.app.state.db
-        existing = await db.playlists.find_one({"_id": pid, "user_id": user["_id"]})
-        if not existing:
-            raise HTTPException(404, "Playlist introuvable")
-        updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
-        updates["updated_at"] = _now()
-        await db.playlists.update_one({"_id": pid}, {"$set": updates})
-        fresh = await db.playlists.find_one({"_id": pid})
-        return _pl_doc_to_model(fresh)
+# --------------------------------------------------------------------------- #
+# Favoris
+# --------------------------------------------------------------------------- #
+@router.post("/media/{mid}/favorite", status_code=201)
+def add_favorite(mid: str, user=Depends(current_user)):
+    get_media_or_404(mid)
+    sb().table("favorites").upsert({"user_id": user["id"], "media_id": mid, "created_at": now_iso()},
+                                    on_conflict="user_id,media_id").execute()
+    return {"ok": True}
 
-    @api_router.delete("/playlists/{pid}", status_code=204)
-    async def delete_playlist(pid: str, request: Request, user=Depends(current_user)):
-        res = await request.app.state.db.playlists.delete_one({"_id": pid, "user_id": user["_id"]})
-        if res.deleted_count == 0:
-            raise HTTPException(404, "Playlist introuvable")
-        return None
 
-    @api_router.post("/playlists/{pid}/items/{mid}", response_model=Playlist)
-    async def add_item(pid: str, mid: str, request: Request, user=Depends(current_user)):
-        db = request.app.state.db
-        if not await db.media_items.find_one({"_id": mid}):
-            raise HTTPException(404, "Média introuvable")
-        pl = await db.playlists.find_one({"_id": pid, "user_id": user["_id"]})
-        if not pl:
-            raise HTTPException(404, "Playlist introuvable")
-        items = pl.get("item_ids", [])
-        if mid not in items:
-            items.append(mid)
-        await db.playlists.update_one({"_id": pid}, {"$set": {"item_ids": items, "updated_at": _now()}})
-        fresh = await db.playlists.find_one({"_id": pid})
-        return _pl_doc_to_model(fresh)
+@router.delete("/media/{mid}/favorite", status_code=204)
+def remove_favorite(mid: str, user=Depends(current_user)):
+    sb().table("favorites").delete().eq("user_id", user["id"]).eq("media_id", mid).execute()
+    return None
 
-    @api_router.delete("/playlists/{pid}/items/{mid}", response_model=Playlist)
-    async def remove_item(pid: str, mid: str, request: Request, user=Depends(current_user)):
-        db = request.app.state.db
-        pl = await db.playlists.find_one({"_id": pid, "user_id": user["_id"]})
-        if not pl:
-            raise HTTPException(404, "Playlist introuvable")
-        items = [i for i in pl.get("item_ids", []) if i != mid]
-        await db.playlists.update_one({"_id": pid}, {"$set": {"item_ids": items, "updated_at": _now()}})
-        fresh = await db.playlists.find_one({"_id": pid})
-        return _pl_doc_to_model(fresh)
 
-    # ============================== PROGRESS ============================== #
-    @api_router.post("/media/progress", response_model=ProgressOut)
-    async def save_progress(data: ProgressPayload, request: Request, user=Depends(current_user)):
-        db = request.app.state.db
-        doc = {
-            "user_id": user["_id"], "media_id": data.media_id,
-            "last_position_seconds": max(0.0, float(data.last_position_seconds)),
-            "completed": bool(data.completed),
-            "updated_at": _now(),
-        }
-        await db.user_progress.update_one(
-            {"user_id": user["_id"], "media_id": data.media_id},
-            {"$set": doc}, upsert=True,
-        )
-        return ProgressOut(**{k: v for k, v in doc.items() if k != "user_id"})
+# --------------------------------------------------------------------------- #
+# Playlists
+# --------------------------------------------------------------------------- #
+def to_playlist(d: dict) -> Playlist:
+    return Playlist(id=d["id"], user_id=d["user_id"], title=d["title"], description=d.get("description"),
+                    item_ids=d.get("item_ids") or [], updated_at=d["updated_at"])
 
-    @api_router.get("/media/progress/list", response_model=List[ProgressOut])
-    async def list_progress(request: Request, user=Depends(current_user)):
-        docs = await request.app.state.db.user_progress.find({"user_id": user["_id"]}).sort("updated_at", -1).to_list(100)
-        return [ProgressOut(
-            media_id=d["media_id"],
-            last_position_seconds=d.get("last_position_seconds", 0.0),
-            completed=d.get("completed", False),
-            updated_at=d.get("updated_at", _now()),
-        ) for d in docs]
 
-    @api_router.get("/media/progress/continue", response_model=List[MediaItem])
-    async def continue_listening(request: Request, user=Depends(current_user), limit: int = 10):
-        db = request.app.state.db
-        progs = await db.user_progress.find({
-            "user_id": user["_id"],
-            "completed": {"$ne": True},
-            "last_position_seconds": {"$gt": 5},
-        }).sort("updated_at", -1).to_list(limit)
-        ids = [p["media_id"] for p in progs]
-        if not ids:
-            return []
-        docs = await db.media_items.find({"_id": {"$in": ids}}).to_list(limit)
-        order = {mid: i for i, mid in enumerate(ids)}
-        docs.sort(key=lambda d: order.get(d["_id"], 0))
-        return [_doc_to_media(d) for d in docs]
+def get_playlist_or_404(pid: str, user: dict) -> dict:
+    res = sb().table("playlists").select("*").eq("id", pid).eq("user_id", user["id"]).limit(1).execute()
+    if not res.data:
+        raise HTTPException(404, "Playlist introuvable")
+    return res.data[0]
+
+
+@router.get("/playlists", response_model=List[Playlist])
+def list_playlists(user=Depends(current_user)):
+    res = sb().table("playlists").select("*").eq("user_id", user["id"]).order("updated_at", desc=True).execute()
+    return [to_playlist(d) for d in res.data]
+
+
+@router.post("/playlists", response_model=Playlist, status_code=201)
+def create_playlist(data: PlaylistIn, user=Depends(current_user)):
+    if not data.title.strip():
+        raise HTTPException(400, "Titre requis")
+    row = {"id": new_id(), "user_id": user["id"], "title": data.title.strip(),
+           "description": data.description, "item_ids": [], "updated_at": now_iso()}
+    res = sb().table("playlists").insert(row).execute()
+    return to_playlist(res.data[0])
+
+
+@router.get("/playlists/{pid}", response_model=Playlist)
+def get_playlist(pid: str, user=Depends(current_user)):
+    return to_playlist(get_playlist_or_404(pid, user))
+
+
+@router.patch("/playlists/{pid}", response_model=Playlist)
+def update_playlist(pid: str, data: PlaylistIn, user=Depends(current_user)):
+    get_playlist_or_404(pid, user)
+    res = sb().table("playlists").update({"title": data.title.strip(), "description": data.description,
+                                          "updated_at": now_iso()}).eq("id", pid).execute()
+    return to_playlist(res.data[0])
+
+
+@router.delete("/playlists/{pid}", status_code=204)
+def delete_playlist(pid: str, user=Depends(current_user)):
+    get_playlist_or_404(pid, user)
+    sb().table("playlists").delete().eq("id", pid).execute()
+    return None
+
+
+@router.post("/playlists/{pid}/items/{mid}", response_model=Playlist)
+def add_to_playlist(pid: str, mid: str, user=Depends(current_user)):
+    p = get_playlist_or_404(pid, user)
+    get_media_or_404(mid)
+    ids = p.get("item_ids") or []
+    if mid not in ids:
+        ids.append(mid)
+    res = sb().table("playlists").update({"item_ids": ids, "updated_at": now_iso()}).eq("id", pid).execute()
+    return to_playlist(res.data[0])
+
+
+@router.delete("/playlists/{pid}/items/{mid}", response_model=Playlist)
+def remove_from_playlist(pid: str, mid: str, user=Depends(current_user)):
+    p = get_playlist_or_404(pid, user)
+    ids = [i for i in (p.get("item_ids") or []) if i != mid]
+    res = sb().table("playlists").update({"item_ids": ids, "updated_at": now_iso()}).eq("id", pid).execute()
+    return to_playlist(res.data[0])

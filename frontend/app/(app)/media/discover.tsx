@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
-import { api, MediaItem } from "@/src/api";
+import { api, MediaItem, MediaCategoriesResponse } from "@/src/api";
 import { mediaTheme, categoryHue } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
@@ -17,8 +17,6 @@ const KIND_FILTERS: { key: string; label: string }[] = [
   { key: "all", label: "Tout" },
   { key: "audio", label: "Audio" },
   { key: "video", label: "Vidéo" },
-  { key: "podcast", label: "Podcasts" },
-  { key: "livre", label: "Livres audio" },
 ];
 
 export default function Discover() {
@@ -29,20 +27,24 @@ export default function Discover() {
   const [q, setQ] = useState("");
   const [kind, setKind] = useState("all");
   const [category, setCategory] = useState<string | null>(null);
+  const [subcategory, setSubcategory] = useState<string | null>(null);
 
   const cats = useQuery({
     queryKey: ["media", "categories"],
-    queryFn: () => api<{ categories: string[]; kinds: string[] }>("/media/categories", {}, token),
+    queryFn: () => api<MediaCategoriesResponse>("/media/categories", {}, token),
     enabled: !!token,
   });
 
+  const catDef = (cats.data?.categories ?? []).find((c) => c.key === category);
+
   const list = useQuery({
-    queryKey: ["media", "search", q, kind, category],
+    queryKey: ["media", "search", q, kind, category, subcategory],
     queryFn: () => {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
       if (kind !== "all") params.set("kind", kind);
       if (category) params.set("category", category);
+      if (subcategory) params.set("subcategory", subcategory);
       const suffix = params.toString();
       return api<MediaItem[]>(`/media${suffix ? "?" + suffix : ""}`, {}, token);
     },
@@ -100,23 +102,41 @@ export default function Discover() {
         contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
         style={{ maxHeight: 44, marginTop: 8 }}
       >
-        <Pressable onPress={() => setCategory(null)} style={[styles.chip, !category && styles.chipOn]}>
+        <Pressable onPress={() => { setCategory(null); setSubcategory(null); }} style={[styles.chip, !category && styles.chipOn]}>
           <Text style={[styles.chipTxt, !category && styles.chipTxtOn]}>Toutes catégories</Text>
         </Pressable>
         {(cats.data?.categories ?? []).map((c) => (
           <Pressable
-            key={c}
-            testID={`cat-${c}`}
-            onPress={() => setCategory(c)}
+            key={c.key}
+            testID={`cat-${c.key}`}
+            onPress={() => { setCategory(c.key); setSubcategory(null); }}
             style={[
               styles.chip,
-              category === c && { backgroundColor: categoryHue[c] || mediaTheme.violet, borderColor: categoryHue[c] || mediaTheme.violet },
+              category === c.key && { backgroundColor: categoryHue[c.key] || mediaTheme.violet, borderColor: categoryHue[c.key] || mediaTheme.violet },
             ]}
           >
-            <Text style={[styles.chipTxt, category === c && { color: "#FFF" }]}>{c}</Text>
+            <Text style={[styles.chipTxt, category === c.key && { color: "#FFF" }]}>{c.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
+
+      {!!catDef && catDef.subcategories.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+          style={{ maxHeight: 44, marginTop: 8 }}
+        >
+          <Pressable onPress={() => setSubcategory(null)} style={[styles.chip, !subcategory && styles.chipOn]}>
+            <Text style={[styles.chipTxt, !subcategory && styles.chipTxtOn]}>Tout · {catDef.label}</Text>
+          </Pressable>
+          {catDef.subcategories.map((sub) => (
+            <Pressable key={sub} testID={`sub-${sub}`} onPress={() => setSubcategory(sub)} style={[styles.chip, subcategory === sub && styles.chipOn]}>
+              <Text style={[styles.chipTxt, subcategory === sub && styles.chipTxtOn]}>{sub}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
 
       {list.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={mediaTheme.gold} /></View>

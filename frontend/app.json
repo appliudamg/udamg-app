@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "UDAMG",
+    "slug": "udamg-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "udamg",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,

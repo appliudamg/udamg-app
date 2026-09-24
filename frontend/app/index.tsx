@@ -1,50 +1,90 @@
-import { useEffect } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, ImageBackground } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useEvent } from "expo";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
-import { colors, spacing } from "@/src/theme";
+import { colors, spacing, radius } from "@/src/theme";
 
-const BG_IMG = "https://images.unsplash.com/photo-1515162305285-0293e4767cc2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwY2h1cmNoJTIwY3Jvc3MlMjBsaWdodHxlbnwwfHx8fDE3ODg2NTEwMTh8MA&ixlib=rb-4.1.0&q=85";
+const INTRO = require("../assets/video/intro.mp4");
+const MAX_INTRO_MS = 12000;
 
-export default function Splash() {
+export default function IntroSplash() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [videoDone, setVideoDone] = useState(false);
+  const navigated = useRef(false);
+
+  const player = useVideoPlayer(INTRO, (p) => {
+    p.loop = false;
+    // Autoplay is only allowed muted on the web.
+    p.muted = Platform.OS === "web";
+    p.play();
+  });
+
+  const { status } = useEvent(player, "statusChange", { status: player.status });
 
   useEffect(() => {
-    if (loading) return;
-    const t = setTimeout(() => {
-      if (user) router.replace("/(app)/menu");
-      else router.replace("/login");
-    }, 900);
+    const sub = player.addListener("playToEnd", () => setVideoDone(true));
+    return () => sub.remove();
+  }, [player]);
+
+  useEffect(() => {
+    if (status === "error") setVideoDone(true);
+  }, [status]);
+
+  // Sécurité : ne jamais bloquer l'utilisateur sur l'intro.
+  useEffect(() => {
+    const t = setTimeout(() => setVideoDone(true), MAX_INTRO_MS);
     return () => clearTimeout(t);
-  }, [loading, user, router]);
+  }, []);
+
+  useEffect(() => {
+    if (!videoDone || loading || navigated.current) return;
+    navigated.current = true;
+    router.replace(user ? "/(app)/menu" : "/login");
+  }, [videoDone, loading, user, router]);
 
   return (
     <View style={styles.container} testID="splash-screen">
-      <ImageBackground source={{ uri: BG_IMG }} style={styles.bg} resizeMode="cover">
-        <LinearGradient
-          colors={["rgba(15,23,42,0.15)", "rgba(15,23,42,0.85)"]}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={styles.content}>
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit="cover"
+        nativeControls={false}
+        allowsPictureInPicture={false}
+      />
+      <View style={[styles.overlay, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]} pointerEvents="box-none">
+        <Pressable
+          testID="splash-skip"
+          onPress={() => setVideoDone(true)}
+          style={({ pressed }) => [styles.skip, pressed && { opacity: 0.7 }]}
+          hitSlop={8}
+        >
+          <Text style={styles.skipTxt}>Passer</Text>
+        </Pressable>
+        <View style={styles.footer}>
           <Text style={styles.brand} testID="splash-app-name">UDAMG</Text>
           <Text style={styles.slogan} testID="splash-slogan">Sauvé par Grâce pour Sauver</Text>
-          <ActivityIndicator color={colors.onSurfaceInverse} style={{ marginTop: spacing.xl }} />
         </View>
-      </ImageBackground>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceInverse },
-  bg: { flex: 1, justifyContent: "flex-end" },
-  content: { padding: spacing.xxl, paddingBottom: spacing.xxxl, gap: spacing.sm },
-  brand: {
-    fontSize: 44, fontWeight: "800", color: colors.onSurfaceInverse, letterSpacing: 2,
+  video: { ...StyleSheet.absoluteFill },
+  overlay: { flex: 1, justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: spacing.xl },
+  skip: {
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)",
+    minHeight: 44, justifyContent: "center",
   },
-  slogan: {
-    fontSize: 16, color: colors.onSurfaceInverse, fontStyle: "italic", opacity: 0.95,
-  },
+  skipTxt: { color: colors.onSurfaceInverse, fontWeight: "700", fontSize: 14 },
+  footer: { alignSelf: "stretch", gap: spacing.xs },
+  brand: { fontSize: 32, fontWeight: "800", color: colors.onSurfaceInverse, letterSpacing: 2 },
+  slogan: { fontSize: 14, color: colors.onSurfaceInverse, fontStyle: "italic", opacity: 0.9 },
 });

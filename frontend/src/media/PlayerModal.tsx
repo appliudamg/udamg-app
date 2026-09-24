@@ -23,7 +23,7 @@ export function PlayerModal() {
   if (!p.current) return null;
 
   const item = p.current;
-  const coverUri = item.cover_path ? mediaCoverUrl(item.id) : null;
+  const coverUri = mediaCoverUrl(item);
   const hue = categoryHue[item.category] || mediaTheme.violetDeep;
   const isFav = p.isFavorite(item.id);
   const pct = p.durationSec > 0 ? p.positionSec / p.durationSec : 0;

@@ -101,3 +101,22 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Itération 15 — Migration Supabase/Vercel + nouvelle arborescence (Juin 2026)
+user_problem_statement: >
+  Migrer tout le projet sur les comptes du client (Supabase Postgres + Storage, Vercel, GitHub).
+  Supprimer le bloc Évangélisation. Garder l'Espace Événements (1.1 Événements complet, 1.2 Messagerie
+  unidirectionnelle Admin/Équipe technique → tous, avec suivi de lecture). Media : nouvelle arborescence
+  (Culte du dimanche, Programmes[UDAMG/CAMP/Autre], Programmes spéciaux[Convention/Nuit de la bonne nouvelle/Autre],
+  Enseignements, Réunions[Réunion Pasteur/Conseil élargi], Podcasts, Story). Rôles : admin, equipe_technique,
+  pasteur, missionnaire, berger, leader, ouvrier, disciple, membre. Écriture média = equipe_technique uniquement.
+  Lecture : admin/pasteur/missionnaire/berger tout ; autres tout sauf Réunion Pasteur & Conseil élargi.
+  Vidéo d'intro au lancement (assets/video/intro.mp4).
+backend:
+  - task: "Auth + admin users (Supabase)"      ; implemented: true ; file: backend/server.py, core.py
+  - task: "Media (taxonomie, upload URL signée, restrictions)" ; implemented: true ; file: backend/media.py
+  - task: "Messagerie diffusion + suivi lecture" ; implemented: true ; file: backend/messaging.py
+  - task: "Événements complet"                ; implemented: true ; file: backend/events.py
+frontend:
+  - task: "Intro vidéo, menu, messagerie, users, profil, media admin (upload signé), rôles" ; implemented: true
+credentials: voir /app/memory/test_credentials.md
+notes: "Upload media = POST /api/media/create-json → POST /api/media/{id}/upload-url → PUT direct Supabase → POST /api/media/{id}/confirm"

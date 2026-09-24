@@ -1,0 +1,7 @@
+fastapi>=0.110
+pydantic[email]>=2.7
+supabase>=2.20
+PyJWT>=2.9
+pwdlib[argon2]>=0.2
+python-dotenv>=1.0
+reportlab>=4.2

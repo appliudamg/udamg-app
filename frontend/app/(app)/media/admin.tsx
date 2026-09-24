@@ -10,7 +10,8 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "@/src/auth";
-import { api, MediaItem, mediaCoverUrl } from "@/src/api";
+import { api, MediaItem, MediaCategoriesResponse } from "@/src/api";
+import { canWriteMedia } from "@/src/roles";
 import { mediaTheme, categoryHue, initialsOf } from "@/src/media_theme";
 
 type FormPick = { uri: string; name: string; mimeType?: string | null; size?: number | null; file?: File | null };
@@ -20,11 +21,11 @@ export default function MediaAdmin() {
   const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
   const qc = useQueryClient();
-  const canManage = user?.role === "pasteur" || user?.role === "ouvrier";
+  const canManage = canWriteMedia(user?.role);
 
   const cats = useQuery({
     queryKey: ["media", "categories"],
-    queryFn: () => api<{ categories: string[]; kinds: string[] }>("/media/categories", {}, token),
+    queryFn: () => api<MediaCategoriesResponse>("/media/categories", {}, token),
     enabled: !!token,
   });
 
@@ -36,7 +37,10 @@ export default function MediaAdmin() {
 
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
-  const [category, setCategory] = useState<string>("Enseignements du Dimanche");
+  const [category, setCategory] = useState<string>("culte_dimanche");
+  const [subcategory, setSubcategory] = useState<string | null>(null);
+  const catDef = (cats.data?.categories ?? []).find((c) => c.key === category);
+  const needsSub = !!catDef && catDef.subcategories.length > 0;
   const [kind, setKind] = useState<string>("audio");
   const [description, setDescription] = useState("");
   const [transcript, setTranscript] = useState("");
@@ -114,7 +118,7 @@ export default function MediaAdmin() {
 
   const resetForm = () => {
     setTitle(""); setAuthor(""); setDescription(""); setTranscript("");
-    setAudio(null); setCover(null);
+    setAudio(null); setCover(null); setSubcategory(null);
   };
 
   const submit = async () => {
@@ -123,88 +127,57 @@ export default function MediaAdmin() {
       toast("Titre et orateur requis"); return;
     }
 
+    if (needsSub && !subcategory) {
+      toast("Choisissez une sous-catégorie"); return;
+    }
     setUploading(true);
     try {
-      const BASE = process.env.EXPO_PUBLIC_BACKEND_URL!;
+      // 1) Métadonnées
+      const created = await api<MediaItem>("/media/create-json", {
+        method: "POST",
+        body: JSON.stringify({
+          title: title.trim(), author: author.trim(), category,
+          subcategory: needsSub ? subcategory : null, kind,
+          description: description.trim() || null,
+          transcript: transcript.trim() || null,
+        }),
+      }, token);
 
-      if (Platform.OS === "web") {
-        // --- WEB path: multipart with FormData + File objects ---
-        const form = new FormData();
-        form.append("title", title.trim());
-        form.append("author", author.trim());
-        form.append("category", category);
-        form.append("kind", kind);
-        if (description.trim()) form.append("description", description.trim());
-        if (transcript.trim()) form.append("transcript", transcript.trim());
-        if (audio) {
-          if (audio.file && typeof (audio.file as any).name === "string") {
-            form.append("audio", audio.file, audio.file.name || audio.name);
-          } else {
-            const resp = await fetch(audio.uri);
-            const blob = await resp.blob();
-            if (!blob.size) throw new Error("Fichier audio vide");
-            const f = new File([blob], audio.name, { type: audio.mimeType || blob.type || "audio/mpeg" });
-            form.append("audio", f, audio.name);
-          }
-        }
-        if (cover) {
-          if (cover.file && typeof (cover.file as any).name === "string") {
-            form.append("cover", cover.file, cover.file.name || cover.name);
-          } else {
-            const resp = await fetch(cover.uri);
-            const blob = await resp.blob();
-            if (!blob.size) throw new Error("Pochette vide");
-            const f = new File([blob], cover.name, { type: cover.mimeType || blob.type || "image/jpeg" });
-            form.append("cover", f, cover.name);
-          }
-        }
-        const res = await fetch(`${BASE}/api/media`, {
+      // 2) Fichiers → upload direct vers Supabase Storage via URL signée
+      const uploadOne = async (field: "audio" | "cover", pick: FormPick, fallbackMime: string) => {
+        const mime = pick.mimeType || fallbackMime;
+        const signed = await api<{ upload_url: string; path: string }>(`/media/${created.id}/upload-url`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: form as any,
-        });
-        const body = await res.text();
-        if (!res.ok) throw new Error(body || `HTTP ${res.status}`);
-      } else {
-        // --- NATIVE path: JSON create + FileSystem.uploadAsync per file ---
-        // 1) create metadata via JSON (avoids RN's fragile FormData for text fields)
-        const created = await api<MediaItem>("/media/create-json", {
-          method: "POST",
-          body: JSON.stringify({
-            title: title.trim(), author: author.trim(),
-            category, kind,
-            description: description.trim() || null,
-            transcript: transcript.trim() || null,
-          }),
+          body: JSON.stringify({ field, filename: pick.name, content_type: mime }),
         }, token);
-
-        // 2) upload audio/video (if any) via FileSystem.uploadAsync
-        if (audio) {
-          const defaultMime = isVideoKind ? "video/mp4" : "audio/mpeg";
-          const r = await FileSystem.uploadAsync(`${BASE}/api/media/${created.id}/upload`, audio.uri, {
-            httpMethod: "POST",
-            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-            fieldName: "file",
-            parameters: { kind: "audio" },
-            mimeType: audio.mimeType || defaultMime,
-            headers: { Authorization: `Bearer ${token}` },
+        if (Platform.OS === "web") {
+          let body: Blob;
+          if (pick.file && typeof (pick.file as any).size === "number") {
+            body = pick.file as Blob;
+          } else {
+            const resp = await fetch(pick.uri);
+            body = await resp.blob();
+          }
+          if (!body.size) throw new Error(`${field === "audio" ? "Fichier" : "Pochette"} vide`);
+          const r = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": mime }, body });
+          if (!r.ok) throw new Error(`${field}: HTTP ${r.status} ${(await r.text()).slice(0, 160)}`);
+        } else {
+          const r = await FileSystem.uploadAsync(signed.upload_url, pick.uri, {
+            httpMethod: "PUT",
+            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+            headers: { "Content-Type": mime },
           });
-          if (r.status >= 400) throw new Error(`Fichier: ${r.body?.slice(0, 200) || `HTTP ${r.status}`}`);
+          if (r.status >= 400) throw new Error(`${field}: ${r.body?.slice(0, 160) || `HTTP ${r.status}`}`);
         }
+        // 3) Confirmation côté API
+        await api(`/media/${created.id}/confirm`, {
+          method: "POST",
+          body: JSON.stringify({ field, path: signed.path }),
+        }, token);
+      };
 
-        // 3) upload cover (if any)
-        if (cover) {
-          const r = await FileSystem.uploadAsync(`${BASE}/api/media/${created.id}/upload`, cover.uri, {
-            httpMethod: "POST",
-            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-            fieldName: "file",
-            parameters: { kind: "cover" },
-            mimeType: cover.mimeType || "image/jpeg",
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (r.status >= 400) throw new Error(`Pochette: ${r.body?.slice(0, 200) || `HTTP ${r.status}`}`);
-        }
-      }
+      if (audio) await uploadOne("audio", audio, isVideoKind ? "video/mp4" : "audio/mpeg");
+      if (cover) await uploadOne("cover", cover, "image/jpeg");
 
       toast("Média créé ✓");
       resetForm();
@@ -240,7 +213,7 @@ export default function MediaAdmin() {
     return (
       <View style={[styles.root, styles.center]}>
         <Text style={{ color: mediaTheme.text, fontSize: 18, fontWeight: "800" }}>Accès réservé</Text>
-        <Text style={{ color: mediaTheme.textMuted, marginTop: 8 }}>Seul un Pasteur ou un Ouvrier peut uploader du contenu.</Text>
+        <Text style={{ color: mediaTheme.textMuted, marginTop: 8 }}>Seule l&apos;Équipe technique peut ajouter ou modifier du contenu.</Text>
         <Pressable onPress={() => router.back()} style={{ marginTop: 20, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: mediaTheme.gold, borderRadius: 999 }}>
           <Text style={{ color: "#000", fontWeight: "800" }}>Retour</Text>
         </Pressable>
@@ -279,13 +252,26 @@ export default function MediaAdmin() {
           <Field label="Catégorie">
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
               {(cats.data?.categories ?? []).map((c) => (
-                <Pressable key={c} testID={`admin-cat-${c}`} onPress={() => setCategory(c)}
-                  style={[styles.chip, category === c && { backgroundColor: categoryHue[c] || mediaTheme.violet, borderColor: categoryHue[c] || mediaTheme.violet }]}>
-                  <Text style={[styles.chipTxt, category === c && { color: "#FFF" }]}>{c}</Text>
+                <Pressable key={c.key} testID={`admin-cat-${c.key}`} onPress={() => { setCategory(c.key); setSubcategory(null); }}
+                  style={[styles.chip, category === c.key && { backgroundColor: categoryHue[c.key] || mediaTheme.violet, borderColor: categoryHue[c.key] || mediaTheme.violet }]}>
+                  <Text style={[styles.chipTxt, category === c.key && { color: "#FFF" }]}>{c.label}</Text>
                 </Pressable>
               ))}
             </ScrollView>
           </Field>
+
+          {needsSub && (
+            <Field label="Sous-catégorie">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                {catDef!.subcategories.map((sub) => (
+                  <Pressable key={sub} testID={`admin-sub-${sub}`} onPress={() => setSubcategory(sub)}
+                    style={[styles.chip, subcategory === sub && styles.chipOn]}>
+                    <Text style={[styles.chipTxt, subcategory === sub && { color: "#000" }]}>{sub}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </Field>
+          )}
 
           <Field label="Type">
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
@@ -347,8 +333,8 @@ export default function MediaAdmin() {
         {(list.data ?? []).map((m) => (
           <View key={m.id} style={styles.rowCard}>
             <View style={[styles.rowCover, { backgroundColor: categoryHue[m.category] || mediaTheme.violetDeep }]}>
-              {m.cover_path ? (
-                <Image source={{ uri: mediaCoverUrl(m.id) }} style={{ width: "100%", height: "100%" }} />
+              {m.cover_url ? (
+                <Image source={{ uri: m.cover_url! }} style={{ width: "100%", height: "100%" }} />
               ) : (
                 <Text style={{ color: "#FFF", fontWeight: "900" }}>{initialsOf(m.title)}</Text>
               )}
@@ -356,7 +342,7 @@ export default function MediaAdmin() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle} numberOfLines={1}>{m.title}</Text>
               <Text style={styles.rowSub} numberOfLines={1}>
-                {m.author} · {m.category}
+                {m.author} · {m.category_label}{m.subcategory ? ` › ${m.subcategory}` : ""}
                 {m.audio_path ? "" : " · sans audio"}
               </Text>
             </View>

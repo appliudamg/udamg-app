@@ -1,0 +1,11 @@
+frontend/node_modules
+frontend/.expo
+frontend/.metro-cache
+backend/__pycache__
+backend/tests
+backend/.env
+memory
+test_reports
+tests
+supabase
+.git

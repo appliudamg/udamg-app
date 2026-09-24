@@ -4,20 +4,19 @@ import {
   Platform, ActivityIndicator, ScrollView, Clipboard as RNClipboard,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Login() {
-  const { login, loginWithGoogle, denied, clearDenied } = useAuth();
+  const { login, denied, clearDenied } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState("admin@udamg.app");
-  const [password, setPassword] = useState("AdminUdamg2026!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [gLoading, setGLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const onSubmit = async () => {
@@ -34,19 +33,6 @@ export default function Login() {
       setError(e?.message || "Erreur de connexion");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const onGoogle = async () => {
-    setError("");
-    try {
-      setGLoading(true);
-      await loginWithGoogle();
-      router.replace("/(app)/menu");
-    } catch (e: any) {
-      setError(e?.message || "Connexion Google échouée");
-    } finally {
-      setGLoading(false);
     }
   };
 
@@ -148,33 +134,8 @@ export default function Login() {
           )}
         </Pressable>
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerTxt}>OU</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Pressable
-          testID="login-google-button"
-          onPress={onGoogle}
-          disabled={gLoading}
-          style={({ pressed }) => [styles.gCta, (pressed || gLoading) && { opacity: 0.85 }]}
-        >
-          {gLoading ? (
-            <ActivityIndicator color={colors.onSurface} />
-          ) : (
-            <>
-              <Text style={styles.gIcon}>G</Text>
-              <Text style={styles.gLabel}>Continuer avec Google</Text>
-            </>
-          )}
-        </Pressable>
-
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Pas encore de compte ? </Text>
-          <Link href="/register" testID="login-go-register">
-            <Text style={styles.footerLink}>Créer un compte</Text>
-          </Link>
+          <Text style={styles.footerText}>Pas de compte ? L&apos;accès est attribué par un administrateur UDAMG.</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
