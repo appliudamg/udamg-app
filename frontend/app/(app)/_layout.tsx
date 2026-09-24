@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useAuth } from "@/src/auth";
+import { registerForPush } from "@/src/push";
 import { colors } from "@/src/theme";
 
 export default function AppLayout() {
@@ -11,6 +12,11 @@ export default function AppLayout() {
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
+
+  // Enregistre le téléphone pour les notifications push à chaque session
+  useEffect(() => {
+    if (user) registerForPush(user.id);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !user) {
     return (

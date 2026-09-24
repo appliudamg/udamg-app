@@ -9,14 +9,16 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.churchconnect.u28idv"
+      "bundleIdentifier": "com.emergent.churchconnect.u28idv",
+      "infoPlist": {}
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.churchconnect.u28idv"
+      "package": "com.udamg.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -60,6 +62,13 @@
         {
           "supportsBackgroundPlayback": false,
           "supportsPictureInPicture": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/adaptive-icon.png",
+          "color": "#0047AB"
         }
       ]
     ],

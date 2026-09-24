@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "615921445375",
+    "project_id": "udamg-app",
+    "storage_bucket": "udamg-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:615921445375:android:64631eec8ad0e401f4dfca",
+        "android_client_info": {
+          "package_name": "com.udamg.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWB67QNxkaLkKCb7uuLiTINoGBu16o4d0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

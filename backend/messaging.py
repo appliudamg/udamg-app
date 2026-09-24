@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import MESSAGE_SEND_ROLES, current_user, display_name, new_id, now_iso, require_role, sb
+from push import broadcast_push
 
 router = APIRouter(prefix="/api")
 send_dep = require_role(*MESSAGE_SEND_ROLES)
@@ -77,7 +78,16 @@ def send_message(data: MessageIn, user=Depends(send_dep)):
     row = {"id": new_id(), "sender_id": user["id"], "sender_name": display_name(user),
            "title": data.title.strip(), "body": data.body.strip(), "created_at": now_iso()}
     res = sb().table("messages").insert(row).execute()
-    return _to_message(res.data[0], None, 0, len(_recipients()))
+    recipients = _recipients()
+    # Notification push sur tous les téléphones (non bloquant)
+    broadcast_push(
+        [u["id"] for u in recipients],
+        title=row["title"],
+        message=row["body"],
+        action_url=f"/(app)/messages/{row['id']}",
+        key=f"msg-{row['id']}",
+    )
+    return _to_message(res.data[0], None, 0, len(recipients))
 
 
 def _get_message(mid: str) -> dict:
