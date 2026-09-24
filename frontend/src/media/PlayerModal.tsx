@@ -10,6 +10,7 @@ import { mediaCoverUrl, mediaFileUrl, fmtDuration } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { Heart, Moon, Pause, Play } from "lucide-react-native";
 
 const RATES = [0.75, 1, 1.25, 1.5, 2];
 
@@ -38,7 +39,7 @@ export function PlayerModal() {
       statusBarTranslucent
     >
       {isVideo ? (
-        <VideoScreen url={mediaFileUrl(item.id, token!)} item={item} onClose={p.closePlayer} isFav={isFav} onFav={() => p.toggleFavorite(item.id).catch(() => {})} />
+        <VideoScreen url={item.stream_url || mediaFileUrl(item.id, token!)} item={item} onClose={p.closePlayer} isFav={isFav} onFav={() => p.toggleFavorite(item.id).catch(() => {})} />
       ) : (
       <View style={styles.root}>
         <LinearGradient
@@ -55,7 +56,7 @@ export function PlayerModal() {
             <Text style={styles.headerTitle}>Écoute en cours</Text>
           </View>
           <Pressable testID="player-fav" onPress={() => p.toggleFavorite(item.id).catch(() => {})} hitSlop={12}>
-            <Text style={[styles.heart, isFav && { color: mediaTheme.ruby }]}>{isFav ? "♥" : "♡"}</Text>
+            <Heart size={28} color={isFav ? mediaTheme.ruby : mediaTheme.textMuted} fill={isFav ? mediaTheme.ruby : "transparent"} />
           </Pressable>
         </View>
 
@@ -115,7 +116,7 @@ export function PlayerModal() {
               <Text style={styles.jumpTxt}>−10</Text>
             </Pressable>
             <Pressable testID="player-toggle" onPress={p.toggle} style={styles.playBtn}>
-              <Text style={styles.playIcon}>{p.isPlaying ? "❚❚" : "▶"}</Text>
+              {p.isPlaying ? <Pause size={26} color="#000" fill="#000" /> : <Play size={26} color="#000" fill="#000" />}
             </Pressable>
             <Pressable testID="player-fwd10" onPress={() => p.seekBy(10)} hitSlop={12} style={styles.jumpBtn}>
               <Text style={styles.jumpTxt}>+10</Text>
@@ -136,8 +137,9 @@ export function PlayerModal() {
               onPress={() => setShowSleep(true)}
               style={styles.extraBtn}
             >
+              <Moon size={16} color={mediaTheme.text} />
               <Text style={styles.extraTxt}>
-                {p.sleepRemainingSec ? `😴 ${Math.ceil(p.sleepRemainingSec / 60)}m` : "😴 Sommeil"}
+                {p.sleepRemainingSec ? `${Math.ceil(p.sleepRemainingSec / 60)} min` : "Sommeil"}
               </Text>
             </Pressable>
           </View>
@@ -181,7 +183,7 @@ function VideoScreen({
           <Text style={videoStyles.title} numberOfLines={1}>{item.title}</Text>
         </View>
         <Pressable testID="video-fav" onPress={onFav} hitSlop={12} style={videoStyles.iconBtn}>
-          <Text style={[videoStyles.icon, isFav && { color: mediaTheme.ruby }]}>{isFav ? "♥" : "♡"}</Text>
+          <Heart size={26} color={isFav ? mediaTheme.ruby : "#FFF"} fill={isFav ? mediaTheme.ruby : "transparent"} />
         </Pressable>
       </View>
       <VideoView
@@ -345,6 +347,7 @@ const styles = StyleSheet.create({
   playIcon: { color: "#000", fontWeight: "900", fontSize: 22 },
   extraRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 16 },
   extraBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
     borderWidth: 1, borderColor: mediaTheme.border, backgroundColor: mediaTheme.card,
   },

@@ -71,9 +71,9 @@ export default function UsersAdmin() {
       }, token);
     },
     onSuccess: (u: any) => {
-      if (u?.email_sent) toast("Utilisateur enregistré ✓ · Email d'accès envoyé");
-      else if (u?.email_error && f.password) toast(`Utilisateur enregistré ✓ · Email non envoyé : ${u.email_error}`);
-      else toast("Utilisateur enregistré ✓");
+      if (u?.email_sent) toast("Utilisateur enregistré · Email d'accès envoyé");
+      else if (u?.email_error && f.password) toast(`Utilisateur enregistré · Email non envoyé : ${u.email_error}`);
+      else toast("Utilisateur enregistré");
       setOpen(null); qc.invalidateQueries({ queryKey: ["admin", "users"] });
     },
     onError: (e: any) => toast(e?.message || "Erreur"),
@@ -166,7 +166,7 @@ export default function UsersAdmin() {
             <Text style={styles.label}>Email</Text>
             <TextInput testID="user-form-email" value={f.email} editable={open?.mode === "create"} onChangeText={(t) => setF({ ...f, email: t })} style={[styles.input, open?.mode === "edit" && { opacity: 0.6 }]} autoCapitalize="none" keyboardType="email-address" placeholder="email@exemple.com" placeholderTextColor={colors.muted} />
             <Text style={styles.label}>{open?.mode === "create" ? "Mot de passe (min. 6 caractères)" : "Nouveau mot de passe (optionnel)"}</Text>
-            <Text style={styles.help}>📧 La personne recevra automatiquement un email avec le lien de l&apos;application, son identifiant et ce mot de passe.</Text>
+            <Text style={styles.help}>La personne recevra automatiquement un email avec le lien de l&apos;application, son identifiant et ce mot de passe.</Text>
             <TextInput testID="user-form-password" value={f.password} onChangeText={(t) => setF({ ...f, password: t })} style={styles.input} secureTextEntry placeholder="••••••••" placeholderTextColor={colors.muted} />
 
             <Text style={styles.label}>Rôle</Text>

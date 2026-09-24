@@ -172,14 +172,14 @@ export default function MediaAdmin() {
         // 3) Confirmation côté API
         await api(`/media/${created.id}/confirm`, {
           method: "POST",
-          body: JSON.stringify({ field, path: signed.path }),
+          body: JSON.stringify({ field, path: signed.path, content_type: mime }),
         }, token);
       };
 
       if (audio) await uploadOne("audio", audio, isVideoKind ? "video/mp4" : "audio/mpeg");
       if (cover) await uploadOne("cover", cover, "image/jpeg");
 
-      toast("Média créé ✓");
+      toast("Média créé");
       resetForm();
       qc.invalidateQueries({ queryKey: ["media"] });
       qc.invalidateQueries({ queryKey: ["media", "admin", "list"] });
@@ -309,17 +309,17 @@ export default function MediaAdmin() {
             <Pressable testID="admin-pick-audio" onPress={pickMedia} style={styles.filePick}>
               <Text style={styles.filePickTxt}>
                 {audio
-                  ? "🔁 Remplacer le fichier"
+                  ? "Remplacer le fichier"
                   : isVideoKind
-                    ? `🎬 Sélectionner une vidéo (${videoExts})`
-                    : `📁 Sélectionner un fichier audio (${audioExts})`}
+                    ? `Sélectionner une vidéo (${videoExts})`
+                    : `Sélectionner un fichier audio (${audioExts})`}
               </Text>
             </Pressable>
           </Field>
 
           <Field label={`Pochette${cover ? ` — ${cover.name}` : ""}`}>
             <Pressable testID="admin-pick-cover" onPress={pickCover} style={styles.filePick}>
-              <Text style={styles.filePickTxt}>{cover ? "🔁 Remplacer la pochette" : "🖼 Choisir une image de pochette"}</Text>
+              <Text style={styles.filePickTxt}>{cover ? "Remplacer la pochette" : "Choisir une image de pochette"}</Text>
             </Pressable>
           </Field>
 

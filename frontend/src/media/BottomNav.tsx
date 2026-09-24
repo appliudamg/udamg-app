@@ -4,13 +4,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/player";
 import { mediaTheme } from "@/src/media_theme";
+import { Heart, Music, Search, type LucideIcon } from "lucide-react-native";
 
 type Tab = "home" | "discover" | "library";
 
-const TABS: { key: Tab; label: string; icon: string; path: string }[] = [
-  { key: "home", label: "Accueil", icon: "♫", path: "/(app)/media" },
-  { key: "discover", label: "Découvrir", icon: "⌕", path: "/(app)/media/discover" },
-  { key: "library", label: "Bibliothèque", icon: "♥", path: "/(app)/media/library" },
+const TABS: { key: Tab; label: string; Icon: LucideIcon; path: string }[] = [
+  { key: "home", label: "Accueil", Icon: Music, path: "/(app)/media" },
+  { key: "discover", label: "Découvrir", Icon: Search, path: "/(app)/media/discover" },
+  { key: "library", label: "Bibliothèque", Icon: Heart, path: "/(app)/media/library" },
 ];
 
 export function BottomNav({ active }: { active: Tab }) {
@@ -40,7 +41,7 @@ export function BottomNav({ active }: { active: Tab }) {
               style={styles.tab}
               hitSlop={4}
             >
-              <Text style={[styles.icon, on && { color: mediaTheme.gold }]}>{t.icon}</Text>
+              <t.Icon size={22} color={on ? mediaTheme.gold : mediaTheme.textMuted} />
               <Text style={[styles.label, on && { color: mediaTheme.gold, fontWeight: "800" }]}>{t.label}</Text>
             </Pressable>
           );

@@ -10,6 +10,7 @@ import { useToast, ToastProvider } from "@/src/toast";
 import { api } from "@/src/api";
 import { EVENT_PROFILS, CATEGORIES_AGE, EventParticipant, EventProfil, CategorieAge, profilColor } from "@/src/event-api";
 import { colors, spacing, radius } from "@/src/theme";
+import { CheckCircle2 } from "lucide-react-native";
 
 function Inner() {
   const insets = useSafeAreaInsets();
@@ -47,7 +48,7 @@ function Inner() {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <ScrollView contentContainerStyle={styles.doneWrap}>
-          <Text style={styles.doneIcon}>✅</Text>
+          <CheckCircle2 size={64} color={colors.success} />
           <Text style={styles.doneTitle}>Inscription confirmée</Text>
           <Text style={styles.doneName}>{done.prenom} {done.nom}</Text>
           <Text style={styles.doneBadge}>{done.badge_id}</Text>
@@ -58,7 +59,7 @@ function Inner() {
             onPress={() => router.push(`/badge?event=${event}&b=${done.badge_id}`)}
             style={[styles.cta, { marginTop: spacing.xl }]}
           >
-            <Text style={styles.ctaTxt}>🎫 Voir mon badge</Text>
+            <Text style={styles.ctaTxt}>Voir mon badge</Text>
           </Pressable>
           <Pressable onPress={() => { setDone(null); setProfil(null); setF({ nom: "", prenom: "", tel: "", email: "", eglise: "", referent: "" }); }} style={styles.linkBtn}>
             <Text style={styles.linkTxt}>Nouvelle inscription</Text>

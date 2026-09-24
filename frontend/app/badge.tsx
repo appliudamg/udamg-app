@@ -6,6 +6,7 @@ import QRCode from "react-native-qrcode-svg";
 import { api } from "@/src/api";
 import { EventParticipant, profilColor } from "@/src/event-api";
 import { colors, spacing, radius } from "@/src/theme";
+import { X } from "lucide-react-native";
 
 export default function Badge() {
   const insets = useSafeAreaInsets();
@@ -32,7 +33,7 @@ export default function Badge() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView contentContainerStyle={styles.wrap}>
         <Pressable testID="badge-back" onPress={() => router.back()} style={styles.close}>
-          <Text style={styles.closeTxt}>✕</Text>
+          <X size={20} color="#FFF" />
         </Pressable>
 
         <View style={styles.card} testID="badge-card">

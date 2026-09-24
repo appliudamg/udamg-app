@@ -15,6 +15,7 @@ import events
 import media
 import messaging
 import push
+import stories
 from mailer import send_credentials_email
 
 RoleLiteral = Literal["admin", "equipe_technique", "pasteur", "missionnaire", "berger",
@@ -205,3 +206,4 @@ app.include_router(media.router)
 app.include_router(messaging.router)
 app.include_router(events.router)
 app.include_router(push.router)
+app.include_router(stories.router)

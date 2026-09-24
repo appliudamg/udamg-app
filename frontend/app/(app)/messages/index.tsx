@@ -11,6 +11,7 @@ import { api, Message, fmtDateTime } from "@/src/api";
 import { canSendMessages } from "@/src/roles";
 import { useToast } from "@/src/toast";
 import { colors, spacing, radius } from "@/src/theme";
+import { Megaphone } from "lucide-react-native";
 
 export default function MessagesList() {
   const insets = useSafeAreaInsets();
@@ -33,7 +34,7 @@ export default function MessagesList() {
   const send = useMutation({
     mutationFn: () => api<Message>("/messages", { method: "POST", body: JSON.stringify({ title: title.trim(), body: body.trim() }) }, token),
     onSuccess: () => {
-      toast("Message diffusé à tous les utilisateurs ✓");
+      toast("Message diffusé à tous les utilisateurs");
       setCompose(false); setTitle(""); setBody("");
       qc.invalidateQueries({ queryKey: ["messages"] });
     },
@@ -67,7 +68,7 @@ export default function MessagesList() {
           refreshControl={<RefreshControl refreshing={list.isRefetching} onRefresh={() => list.refetch()} tintColor={colors.brandPrimary} />}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>📣</Text>
+              <Megaphone size={40} color={colors.muted} />
               <Text style={styles.emptyTxt}>Aucun message pour le moment.</Text>
             </View>
           }
@@ -87,7 +88,7 @@ export default function MessagesList() {
                 <Text style={styles.rowSender}>De {item.sender_name}</Text>
                 {sender && (
                   <Text style={styles.rowReads} testID={`message-reads-${item.id}`}>
-                    👁 {item.read_count}/{item.recipients_count} lu{item.read_count > 1 ? "s" : ""}
+                    Lu par {item.read_count}/{item.recipients_count}
                   </Text>
                 )}
               </View>

@@ -53,6 +53,7 @@ export type MediaItem = {
   transcript?: string | null;
   created_at: string;
   created_by?: string | null;
+  stream_url?: string | null;
 };
 
 export type Playlist = {
@@ -62,6 +63,13 @@ export type Playlist = {
 
 export type MediaProgress = {
   media_id: string; last_position_seconds: number; completed: boolean; updated_at: string;
+};
+
+// ---- Stories
+export type Story = {
+  id: string; kind: "image" | "video"; media_path?: string | null; url?: string | null;
+  caption?: string | null; created_by?: string | null; author_name: string;
+  created_at: string; expires_at: string; viewed: boolean; views_count: number;
 };
 
 // ---- Messagerie

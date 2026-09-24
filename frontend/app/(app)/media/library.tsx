@@ -12,6 +12,7 @@ import { mediaTheme } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
+import { ListMusic } from "lucide-react-native";
 
 type Tab = "playlists" | "favorites";
 
@@ -116,7 +117,7 @@ export default function Library() {
                 style={styles.plCard}
               >
                 <View style={styles.plCover}>
-                  <Text style={styles.plCoverTxt}>♪</Text>
+                  <ListMusic size={24} color={mediaTheme.gold} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.plTitle} numberOfLines={1}>{pl.title}</Text>
@@ -129,7 +130,7 @@ export default function Library() {
         ) : favorites.isLoading ? (
           <ActivityIndicator color={mediaTheme.gold} style={{ marginTop: 30 }} />
         ) : (favorites.data ?? []).length === 0 ? (
-          <Text style={styles.empty}>Aucun favori — appuyez sur ♡ pendant l&apos;écoute pour en ajouter.</Text>
+          <Text style={styles.empty}>Aucun favori — appuyez sur le cœur pendant l&apos;écoute pour en ajouter.</Text>
         ) : (
           favorites.data!.map((it) => (
             <MediaCard key={it.id} item={it} onPress={() => onPlayFav(it)} />

@@ -155,7 +155,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const url = mediaFileUrl(item.id, token);
+    const url = item.stream_url || mediaFileUrl(item.id, token);
     try {
       const p = createAudioPlayer({ uri: url }, { updateInterval: 500 });
       playerRef.current = p;

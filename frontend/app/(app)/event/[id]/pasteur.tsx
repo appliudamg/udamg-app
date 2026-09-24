@@ -13,6 +13,7 @@ import { EventDashboard, EventSession, PointageRecord } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
 import { canAdminEvents } from "@/src/roles";
+import { Trash2 } from "lucide-react-native";
 
 export default function Pasteur() {
   const insets = useSafeAreaInsets();
@@ -139,7 +140,7 @@ export default function Pasteur() {
         {/* Répartition par église */}
         {dash?.presence?.by_eglise && Object.keys(dash.presence.by_eglise).length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🏛 Répartition par église (présents)</Text>
+            <Text style={styles.sectionTitle}>Répartition par église (présents)</Text>
             <View style={styles.chipRow}>
               {Object.entries(dash.presence.by_eglise).map(([e, n]) => (
                 <View key={e} style={styles.egliseChip}>
@@ -158,7 +159,7 @@ export default function Pasteur() {
               <Text style={styles.actBtnTxt}>▶ Lancer une séance</Text>
             </Pressable>
             <Pressable testID="pasteur-bilan-pdf" onPress={runBilan} disabled={busyPdf} style={[styles.actBtn, { backgroundColor: colors.error }, busyPdf && { opacity: 0.5 }]}>
-              {busyPdf ? <ActivityIndicator color="#FFF" /> : <Text style={styles.actBtnTxt}>📄 Rapport bilan PDF</Text>}
+              {busyPdf ? <ActivityIndicator color="#FFF" /> : <Text style={styles.actBtnTxt}>Rapport bilan PDF</Text>}
             </Pressable>
           </View>
 
@@ -178,7 +179,7 @@ export default function Pasteur() {
               )}
               {isPasteur && (
                 <Pressable testID={`purge-${s.id}`} onPress={() => setPurgeOpen(s.id)} style={[styles.miniBtn, { backgroundColor: colors.error, marginLeft: 6 }]}>
-                  <Text style={styles.miniBtnTxt}>🗑</Text>
+                  <Trash2 size={14} color="#FFFFFF" />
                 </Pressable>
               )}
             </View>
@@ -186,7 +187,7 @@ export default function Pasteur() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔔 Arrivées récentes (LIVE)</Text>
+          <Text style={styles.sectionTitle}>Arrivées récentes (LIVE)</Text>
           {(recent ?? []).length === 0 ? (
             <Text style={styles.empty}>Aucune arrivée pour l'instant</Text>
           ) : (

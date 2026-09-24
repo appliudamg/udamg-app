@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, User, Invitation, roleLabel } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
+import { Check } from "lucide-react-native";
 
 export default function InviteElders() {
   const insets = useSafeAreaInsets();
@@ -40,7 +41,7 @@ export default function InviteElders() {
         }),
       }, token),
     onSuccess: (res) => {
-      setToast(`${res.created} invitation(s) envoyée(s) ✨`);
+      setToast(`${res.created} invitation(s) envoyée(s)`);
       setSelected(new Set());
       setTimeout(() => router.back(), 900);
     },
@@ -63,7 +64,7 @@ export default function InviteElders() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <View style={styles.badgeRow}>
-            <Text style={styles.badge}>✨ SPÉCIAL</Text>
+            <Text style={styles.badge}>SPÉCIAL</Text>
           </View>
           <Text style={styles.title}>Inviter les anciens</Text>
           <Text style={styles.sub}>{selected.size} sélectionné(s)</Text>
@@ -94,8 +95,8 @@ export default function InviteElders() {
                   <Text style={styles.roleTxt}>{roleLabel(item.role)} · {item.email}</Text>
                 </View>
                 <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
-                  {isSelected && <Text style={styles.checkTxt}>✓</Text>}
-                  {alreadyDone && !isSelected && <Text style={styles.doneTxt}>✓</Text>}
+                  {isSelected && <Check size={16} color="#FFFFFF" />}
+                  {alreadyDone && !isSelected && <Check size={16} color={colors.success} />}
                 </View>
               </Pressable>
             );

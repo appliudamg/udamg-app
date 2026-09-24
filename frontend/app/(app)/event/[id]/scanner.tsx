@@ -11,6 +11,7 @@ import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
 import { EventDashboard, EventParticipant } from "@/src/event-api";
 import { colors, spacing, radius } from "@/src/theme";
+import { AlertTriangle, Camera, Check, CheckCircle2, SwitchCamera, X, XCircle } from "lucide-react-native";
 
 type ScanResult = {
   kind: "ok" | "already" | "error";
@@ -113,20 +114,20 @@ export default function Scanner() {
           onPress={() => setFacing(f => f === "back" ? "front" : "back")}
           style={styles.iconBtn}
         >
-          <Text style={styles.iconBtnTxt}>🔄</Text>
+          <SwitchCamera size={20} color={colors.onSurface} />
         </Pressable>
       </View>
 
       <View style={[styles.status, scannerLocked ? styles.statusOff : styles.statusOn]}>
         <Text style={styles.statusTxt}>
-          {scannerLocked ? "⚠️ Aucune séance active" : `● Séance : ${activeSession?.nom}`}
+          {scannerLocked ? "Aucune séance active" : `Séance : ${activeSession?.nom}`}
         </Text>
       </View>
 
       <View style={styles.cameraWrap} testID="scanner-camera-wrap">
         {Platform.OS === "web" ? (
           <View style={styles.webCamera}>
-            <Text style={styles.webCameraIcon}>📷</Text>
+            <Camera size={44} color={colors.muted} />
             <Text style={styles.webCameraTxt}>Scanner caméra désactivé sur le preview web.</Text>
             <Text style={styles.webCameraSub}>Utilisez la saisie manuelle ci-dessous ou l'app Expo Go.</Text>
           </View>
@@ -134,7 +135,7 @@ export default function Scanner() {
           <ActivityIndicator color={colors.brandPrimary} />
         ) : !permission.granted ? (
           <View style={styles.permWrap}>
-            <Text style={styles.permIcon}>📷</Text>
+            <Camera size={44} color={colors.muted} />
             <Text style={styles.permTxt}>Autorisez la caméra pour scanner</Text>
             <Pressable onPress={requestPermission} style={styles.permBtn}>
               <Text style={styles.permBtnTxt}>Autoriser</Text>
@@ -192,9 +193,7 @@ export default function Scanner() {
           lastResult.kind === "ok" ? styles.resultOk :
           lastResult.kind === "already" ? styles.resultAlready : styles.resultErr]}
         testID="scanner-last-result">
-          <Text style={styles.resultIcon}>
-            {lastResult.kind === "ok" ? "✓" : lastResult.kind === "already" ? "⚠" : "✕"}
-          </Text>
+          {lastResult.kind === "ok" ? <CheckCircle2 size={28} color="#FFFFFF" /> : lastResult.kind === "already" ? <AlertTriangle size={28} color="#FFFFFF" /> : <XCircle size={28} color="#FFFFFF" />}
           <View style={{ flex: 1 }}>
             <Text style={styles.resultMsg}>{lastResult.message}</Text>
             {lastResult.participant && (
@@ -212,9 +211,7 @@ export default function Scanner() {
           ) : (
             history.map((h, i) => (
               <View key={i} style={styles.historyRow}>
-                <Text style={styles.historyKind}>
-                  {h.kind === "ok" ? "✓" : h.kind === "already" ? "⚠" : "✕"}
-                </Text>
+                {h.kind === "ok" ? <Check size={16} color={colors.success} /> : h.kind === "already" ? <AlertTriangle size={16} color={colors.warning} /> : <X size={16} color={colors.error} />}
                 <Text style={styles.historyMsg} numberOfLines={1}>{h.message}</Text>
                 <Text style={styles.historyTime}>{h.at}</Text>
               </View>

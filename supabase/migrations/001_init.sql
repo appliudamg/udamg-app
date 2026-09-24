@@ -201,3 +201,29 @@ begin
     alter publication supabase_realtime add table public.message_reads;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------- Stories (éphémères, Équipe technique)
+create table if not exists public.stories (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('image','video')),
+  media_path text,
+  caption text,
+  created_by uuid references public.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '24 hours'
+);
+create index if not exists stories_expires_idx on public.stories (expires_at);
+
+create table if not exists public.story_views (
+  story_id uuid not null references public.stories(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  viewed_at timestamptz not null default now(),
+  primary key (story_id, user_id)
+);
+alter table public.stories     enable row level security;
+alter table public.story_views enable row level security;
+
+insert into storage.buckets (id, name, public) values ('stories', 'stories', true)
+on conflict (id) do update set public = excluded.public;
+drop policy if exists "stories_public_read" on storage.objects;
+create policy "stories_public_read" on storage.objects for select using (bucket_id = 'stories');

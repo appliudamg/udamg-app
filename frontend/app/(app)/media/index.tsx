@@ -12,6 +12,8 @@ import { MediaCard } from "@/src/media/MediaCard";
 import { usePlayer } from "@/src/player";
 import { BottomNav } from "@/src/media/BottomNav";
 import { canWriteMedia } from "@/src/roles";
+import { Settings } from "lucide-react-native";
+import { StoriesStrip } from "@/src/media/StoriesStrip";
 
 export default function MediaHome() {
   const router = useRouter();
@@ -65,7 +67,7 @@ export default function MediaHome() {
             onPress={() => router.push("/(app)/media/admin")}
             style={styles.adminBtn}
           >
-            <Text style={styles.adminTxt}>⚙</Text>
+            <Settings size={20} color="#000" />
           </Pressable>
         )}
       </View>
@@ -80,6 +82,8 @@ export default function MediaHome() {
             <RefreshControl refreshing={media.isRefetching} onRefresh={() => media.refetch()} tintColor={mediaTheme.gold} />
           }
         >
+          <StoriesStrip />
+
           {/* Featured banners */}
           {featured.length > 0 && (
             <ScrollView
@@ -130,7 +134,7 @@ export default function MediaHome() {
           {(media.data?.length ?? 0) === 0 && (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyTitle}>Bibliothèque vide</Text>
-              <Text style={styles.emptyTxt}>Aucun média disponible pour le moment.{canAdmin ? " Uploadez vos premiers contenus via la console admin ⚙" : ""}</Text>
+              <Text style={styles.emptyTxt}>Aucun média disponible pour le moment.{canAdmin ? " Ajoutez vos premiers contenus via la console admin." : ""}</Text>
             </View>
           )}
         </ScrollView>

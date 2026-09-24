@@ -61,7 +61,7 @@ export default function Enfants() {
         <>
           <View style={[styles.status, locked ? styles.statusOff : styles.statusOn]}>
             <Text style={styles.statusTxt}>
-              {locked ? "⚠️ Aucune séance active" : `● Séance : ${data?.session_nom}`}
+              {locked ? "Aucune séance active" : `Séance : ${data?.session_nom}`}
             </Text>
           </View>
 

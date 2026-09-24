@@ -7,6 +7,7 @@ import { api } from "@/src/api";
 import { EventDashboard } from "@/src/event-api";
 import { colors, spacing, radius } from "@/src/theme";
 import { canManageEvents } from "@/src/roles";
+import { Baby, BarChart3, Clock, Link2, Pause, Users } from "lucide-react-native";
 
 export default function EventHub() {
   const insets = useSafeAreaInsets();
@@ -45,7 +46,7 @@ export default function EventHub() {
         {/* Session banner */}
         <View style={[styles.sessionCard, activeSession ? styles.sessionOn : styles.sessionOff]}>
           <View style={styles.sessionRow}>
-            <Text style={styles.sessionEmoji}>{activeSession ? "🕐" : "⏸"}</Text>
+            {activeSession ? <Clock size={26} color={colors.success} /> : <Pause size={26} color={colors.muted} />}
             <View style={{ flex: 1 }}>
               <Text style={styles.sessionLbl}>SÉANCE</Text>
               <Text style={styles.sessionVal}>
@@ -113,7 +114,7 @@ export default function EventHub() {
           style={({ pressed }) => [styles.outlineBtn, pressed && { opacity: 0.85 }]}
         >
           <View style={[styles.primaryIcon, { backgroundColor: colors.brandTertiary }]}>
-            <Text style={[styles.primaryIconTxt, { color: colors.brandPrimary }]}>👥</Text>
+            <Users size={20} color={colors.brandPrimary} />
           </View>
           <Text style={styles.outlineLbl}>Gestion des Inscrits</Text>
         </Pressable>
@@ -125,7 +126,7 @@ export default function EventHub() {
             style={({ pressed }) => [styles.darkBtn, pressed && { opacity: 0.9 }]}
           >
             <View style={[styles.primaryIcon, { backgroundColor: "#FEF3C7" }]}>
-              <Text style={styles.primaryIconTxt}>📊</Text>
+              <BarChart3 size={20} color="#B45309" />
             </View>
             <Text style={styles.darkLbl}>Espace Pasteur <Text style={styles.darkSub}>(Dashboard)</Text></Text>
           </Pressable>
@@ -139,7 +140,7 @@ export default function EventHub() {
             onPress={() => router.push(`/(app)/event/${id}/enfants?titre=${encodeURIComponent(titre || "")}`)}
             style={({ pressed }) => [styles.miniBtn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.miniEmoji}>🧒</Text>
+            <Baby size={22} color={colors.brandPrimary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.miniTitle}>Comptage enfants</Text>
               <Text style={styles.miniSub}>Incrémenter · décrémenter</Text>
@@ -151,7 +152,7 @@ export default function EventHub() {
             onPress={() => router.push(`/inscription?event=${id}&titre=${encodeURIComponent(titre || "")}`)}
             style={({ pressed }) => [styles.miniBtn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.miniEmoji}>🔗</Text>
+            <Link2 size={22} color={colors.brandPrimary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.miniTitle}>Lien d'inscription publique</Text>
               <Text style={styles.miniSub}>À partager avec le public</Text>

@@ -8,6 +8,7 @@ import { api, roleLabel } from "@/src/api";
 import { canReadRestrictedMedia, canSendMessages, canWriteMedia, canManageUsers, canManageEvents } from "@/src/roles";
 import { useToast } from "@/src/toast";
 import { colors, spacing, radius } from "@/src/theme";
+import { Check, Minus } from "lucide-react-native";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -19,7 +20,7 @@ export default function Profile() {
 
   const change = useMutation({
     mutationFn: () => api("/auth/password", { method: "POST", body: JSON.stringify({ current_password: cur, new_password: next }) }, token),
-    onSuccess: () => { toast("Mot de passe modifié ✓"); setCur(""); setNext(""); },
+    onSuccess: () => { toast("Mot de passe modifié"); setCur(""); setNext(""); },
     onError: (e: any) => toast(e?.message || "Erreur"),
   });
 
@@ -55,7 +56,7 @@ export default function Profile() {
         <View style={styles.box}>
           {rights.map((r) => (
             <View key={r.label} style={styles.right}>
-              <Text style={[styles.rightIcon, { color: r.ok ? colors.success : colors.muted }]}>{r.ok ? "✓" : "—"}</Text>
+              {r.ok ? <Check size={18} color={colors.success} /> : <Minus size={18} color={colors.muted} />}
               <Text style={[styles.rightTxt, !r.ok && { color: colors.muted }]}>{r.label}</Text>
             </View>
           ))}

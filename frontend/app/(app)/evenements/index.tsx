@@ -61,7 +61,7 @@ export default function EvenementsList() {
       qc.invalidateQueries({ queryKey: ["evenements"] });
       setCreateOpen(false);
       setF({ titre: "", description: "", lieu: "", ville: "", type_evenement: "culte_special", date: "" });
-      toast.show("Programme créé ✓", "success");
+      toast.show("Programme créé", "success");
     },
     onError: (e: any) => toast.show(e?.message || "Erreur création", "error"),
   });
@@ -81,13 +81,13 @@ export default function EvenementsList() {
     try {
       if (Platform.OS === "web") {
         await Clipboard.setStringAsync(url);
-        toast.show("Lien copié ✓", "success");
+        toast.show("Lien copié", "success");
       } else {
         await Share.share({ message: `Inscription ${evt.titre} : ${url}`, url });
       }
     } catch {
       await Clipboard.setStringAsync(url);
-      toast.show("Lien copié ✓", "success");
+      toast.show("Lien copié", "success");
     }
   };
 
@@ -184,8 +184,8 @@ export default function EvenementsList() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.typeTag}>{eventTypeLabel(item.type_evenement)}</Text>
                     <Text style={styles.cardTitle} numberOfLines={2}>{item.titre}</Text>
-                    <Text style={styles.cardMeta}>📍 {item.lieu}{item.ville ? ` · ${item.ville}` : ""}</Text>
-                    <Text style={styles.cardMeta}>🕐 {formatDate(item.date)}</Text>
+                    <Text style={styles.cardMeta}>{item.lieu}{item.ville ? ` · ${item.ville}` : ""}</Text>
+                    <Text style={styles.cardMeta}>{formatDate(item.date)}</Text>
                     <Text style={styles.openHub}>Ouvrir le système d'émargement →</Text>
                   </View>
                 </Pressable>
@@ -195,7 +195,7 @@ export default function EvenementsList() {
                     onPress={() => shareLink(item)}
                     style={[styles.cardBtn, { backgroundColor: colors.brandTertiary }]}
                   >
-                    <Text style={[styles.cardBtnTxt, { color: colors.brandPrimary }]}>🔗 Lien d'inscription</Text>
+                    <Text style={[styles.cardBtnTxt, { color: colors.brandPrimary }]}>Lien d'inscription</Text>
                   </Pressable>
                   {isPasteur && (
                     <Pressable
@@ -203,7 +203,7 @@ export default function EvenementsList() {
                       onPress={() => confirmDelete(item)}
                       style={[styles.cardBtn, { backgroundColor: "#FEE2E2" }]}
                     >
-                      <Text style={[styles.cardBtnTxt, { color: colors.error }]}>🗑 Supprimer</Text>
+                      <Text style={[styles.cardBtnTxt, { color: colors.error }]}>Supprimer</Text>
                     </Pressable>
                   )}
                 </View>

@@ -67,11 +67,11 @@ export default function EventDetail() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Détails</Text>
-            <View style={styles.detailRow}><Text style={styles.detailKey}>📍 Lieu</Text><Text style={styles.detailVal}>{evt.lieu}</Text></View>
-            {!!evt.ville && <View style={styles.detailRow}><Text style={styles.detailKey}>🏙 Ville</Text><Text style={styles.detailVal}>{evt.ville}</Text></View>}
+            <View style={styles.detailRow}><Text style={styles.detailKey}>Lieu</Text><Text style={styles.detailVal}>{evt.lieu}</Text></View>
+            {!!evt.ville && <View style={styles.detailRow}><Text style={styles.detailKey}>Ville</Text><Text style={styles.detailVal}>{evt.ville}</Text></View>}
             {evt.intervenants.length > 0 && (
               <View style={styles.detailRow}>
-                <Text style={styles.detailKey}>🎤 Intervenants</Text>
+                <Text style={styles.detailKey}>Intervenants</Text>
                 <Text style={styles.detailVal}>{evt.intervenants.join(", ")}</Text>
               </View>
             )}
@@ -90,7 +90,7 @@ export default function EventDetail() {
               </View>
               <View style={[styles.statCard, styles.specialCard]}>
                 <Text style={[styles.statNum, { color: colors.brandPrimary }]}>{special}</Text>
-                <Text style={styles.statLbl}>✨ Anciens</Text>
+                <Text style={styles.statLbl}>Anciens</Text>
               </View>
             </View>
           </View>
@@ -103,7 +103,7 @@ export default function EventDetail() {
           onPress={() => router.push(`/(app)/evenements/${id}/invite`)}
           style={[styles.stickyCta, { paddingBottom: insets.bottom + spacing.md }]}
         >
-          <Text style={styles.ctaTxt}>Inviter les anciens ✨</Text>
+          <Text style={styles.ctaTxt}>Inviter les anciens</Text>
         </Pressable>
       )}
     </View>

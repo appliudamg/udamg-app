@@ -121,7 +121,7 @@ export default function Inscrits() {
     try {
       setBusyExport(true);
       await downloadExport(`/event/exports/participants.csv?evenement_id=${id}`, `participants_${id}.csv`, token);
-      toast.show("CSV exporté ✓", "success");
+      toast.show("CSV exporté", "success");
     } catch (e: any) {
       toast.show(e?.message || "Erreur export", "error");
     } finally {
@@ -150,15 +150,15 @@ export default function Inscrits() {
 
       <View style={styles.toolbar}>
         <Pressable testID="inscrits-export-csv" onPress={runCsvExport} disabled={busyExport} style={[styles.toolBtn, { backgroundColor: colors.success }, busyExport && { opacity: 0.5 }]}>
-          {busyExport ? <ActivityIndicator color="#FFF" /> : <Text style={styles.toolTxt}>📊 CSV</Text>}
+          {busyExport ? <ActivityIndicator color="#FFF" /> : <Text style={styles.toolTxt}>Export CSV</Text>}
         </Pressable>
         {isPasteur && (
           <>
             <Pressable testID="inscrits-purge-inconnus" onPress={() => setPurgeOpen("inconnus")} style={[styles.toolBtn, { backgroundColor: colors.warning }]}>
-              <Text style={styles.toolTxt}>🗑 Inconnus</Text>
+              <Text style={styles.toolTxt}>Purger inconnus</Text>
             </Pressable>
             <Pressable testID="inscrits-purge-all" onPress={() => setPurgeOpen("all")} style={[styles.toolBtn, { backgroundColor: colors.error }]}>
-              <Text style={styles.toolTxt}>🗑 Tout</Text>
+              <Text style={styles.toolTxt}>Purger tout</Text>
             </Pressable>
           </>
         )}
@@ -204,9 +204,9 @@ export default function Inscrits() {
                   <Text style={styles.profilTxt}>{item.profil}</Text>
                 </View>
               </View>
-              {!!item.eglise && <Text style={styles.meta}>⛪ {item.eglise}</Text>}
-              {!!item.categorie_age && <Text style={styles.meta}>👥 {item.categorie_age}</Text>}
-              {!!item.tel && <Text style={styles.meta}>📞 {item.tel}</Text>}
+              {!!item.eglise && <Text style={styles.meta}>{item.eglise}</Text>}
+              {!!item.categorie_age && <Text style={styles.meta}>{item.categorie_age}</Text>}
+              {!!item.tel && <Text style={styles.meta}>{item.tel}</Text>}
               <View style={styles.dots}>
                 <View style={[styles.dot, item.sms_status === "sent" ? styles.dotSent : item.sms_status === "pending" ? styles.dotPending : styles.dotNone]} />
                 <Text style={styles.dotLbl}>SMS</Text>

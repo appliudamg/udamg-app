@@ -79,7 +79,7 @@ export default function MessageDetail() {
             <Text style={styles.meta}>De {m.sender_name} · {fmtDateTime(m.created_at)}</Text>
             <Text style={styles.body} testID="message-body" selectable>{m.body}</Text>
             {!sender && (
-              <Text style={styles.readNote}>✓ Vu {m.read_at ? `le ${fmtDateTime(m.read_at)}` : "à l'instant"} · canal en lecture seule</Text>
+              <Text style={styles.readNote}>Vu {m.read_at ? `le ${fmtDateTime(m.read_at)}` : "à l'instant"} · canal en lecture seule</Text>
             )}
           </View>
 
@@ -104,7 +104,7 @@ export default function MessageDetail() {
               </View>
 
               {entries.length === 0 ? (
-                <Text style={styles.emptyTxt}>{tab === "read" ? "Personne n'a encore ouvert ce message." : "Tout le monde a vu ce message 🎉"}</Text>
+                <Text style={styles.emptyTxt}>{tab === "read" ? "Personne n'a encore ouvert ce message." : "Tout le monde a vu ce message."}</Text>
               ) : entries.map((e) => (
                 <View key={e.user_id} style={styles.person} testID={`reader-${e.user_id}`}>
                   <View style={styles.avatar}><Text style={styles.avatarTxt}>{(e.prenom?.[0] || "") + (e.nom?.[0] || "")}</Text></View>

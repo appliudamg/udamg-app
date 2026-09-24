@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/src/player";
 import { mediaTheme, initialsOf, categoryHue } from "@/src/media_theme";
 import { mediaCoverUrl } from "@/src/api";
+import { Pause, Play } from "lucide-react-native";
 
 export function MiniPlayer() {
   const insets = useSafeAreaInsets();
@@ -42,7 +43,7 @@ export function MiniPlayer() {
           hitSlop={12}
           style={styles.playBtn}
         >
-          <Text style={styles.playIcon}>{isPlaying ? "❚❚" : "▶"}</Text>
+          {isPlaying ? <Pause size={16} color="#000" fill="#000" /> : <Play size={16} color="#000" fill="#000" />}
         </Pressable>
       </View>
     </Pressable>

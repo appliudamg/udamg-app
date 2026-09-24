@@ -1,7 +1,10 @@
 """Pôle Media (Audios / Vidéos) — Supabase Postgres + Supabase Storage."""
+import os
+import tempfile
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from qtfaststart import processor as qt_processor
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
@@ -49,6 +52,7 @@ class MediaItem(BaseModel):
     transcript: Optional[str] = None
     created_at: str
     created_by: Optional[str] = None
+    stream_url: Optional[str] = None
 
 
 class MediaCreate(BaseModel):
@@ -83,6 +87,7 @@ class ConfirmUpload(BaseModel):
     field: Literal["audio", "cover"]
     path: str
     duration: Optional[float] = None
+    content_type: Optional[str] = None
 
 
 class Playlist(BaseModel):
@@ -133,6 +138,55 @@ def to_item(d: dict) -> MediaItem:
     )
 
 
+def attach_stream_urls(items: List[MediaItem]) -> List[MediaItem]:
+    """URL signée directe (lecture instantanée, requêtes Range gérées par Supabase Storage)."""
+    paths = [i.audio_path for i in items if i.audio_path]
+    if not paths:
+        return items
+    try:
+        signed = sb().storage.from_(MEDIA_BUCKET).create_signed_urls(paths, SIGNED_URL_TTL)
+        by_path = {}
+        for entry in signed:
+            url = entry.get("signedURL") or entry.get("signedUrl")
+            if url and entry.get("path"):
+                by_path[entry["path"]] = url
+        for i in items:
+            if i.audio_path:
+                i.stream_url = by_path.get(i.audio_path)
+    except Exception as e:  # noqa: BLE001
+        from core import logger
+        logger.warning("Signature des URLs impossible : %s", e)
+    return items
+
+
+def faststart_in_place(bucket: str, path: str, content_type: str) -> None:
+    """Déplace l'atome moov en tête (MP4/M4A) pour un démarrage immédiat du streaming."""
+    ext = path.rsplit(".", 1)[-1].lower()
+    if ext not in ("mp4", "m4a", "m4v", "mov"):
+        return
+    data = sb().storage.from_(bucket).download(path)
+    src = tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False)
+    dst_path = src.name + f".fast.{ext}"
+    try:
+        src.write(data)
+        src.close()
+        try:
+            qt_processor.process(src.name, dst_path)
+        except Exception:
+            return  # déjà optimisé ou format non pris en charge
+        with open(dst_path, "rb") as f:
+            out = f.read()
+        if out[:8] != data[:8] or len(out) != len(data):
+            pass
+        sb().storage.from_(bucket).upload(path, out, {"content-type": content_type, "upsert": "true"})
+    finally:
+        for f in (src.name, dst_path):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
+
 def is_restricted(d: dict) -> bool:
     return (d.get("subcategory") or "") in RESTRICTED_SUBCATEGORIES
 
@@ -164,7 +218,7 @@ def items_by_ids(ids: List[str], user: dict) -> List[MediaItem]:
         return []
     res = sb().table("media_items").select("*").in_("id", ids).execute()
     by_id = {d["id"]: d for d in res.data if visible(d, user)}
-    return [to_item(by_id[i]) for i in ids if i in by_id]
+    return attach_stream_urls([to_item(by_id[i]) for i in ids if i in by_id])
 
 
 # --------------------------------------------------------------------------- #
@@ -197,7 +251,7 @@ def list_media(
     if q:
         s = q.replace(",", " ").strip()
         qry = qry.or_(f"title.ilike.%{s}%,author.ilike.%{s}%,description.ilike.%{s}%")
-    return [to_item(d) for d in qry.execute().data if visible(d, user)]
+    return attach_stream_urls([to_item(d) for d in qry.execute().data if visible(d, user)])
 
 
 @router.get("/media/favorites/list", response_model=List[MediaItem])
@@ -232,7 +286,7 @@ def get_media(mid: str, user=Depends(current_user)):
     d = get_media_or_404(mid)
     if not visible(d, user):
         raise HTTPException(403, "Contenu réservé aux Pasteurs / Missionnaires / Bergers")
-    return to_item(d)
+    return attach_stream_urls([to_item(d)])[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -278,11 +332,17 @@ def confirm_upload(mid: str, data: ConfirmUpload, _=Depends(write_dep)):
             sb().storage.from_(bucket).remove([old])
         except Exception:
             pass
+    if data.field == "audio":
+        try:
+            faststart_in_place(MEDIA_BUCKET, data.path, data.content_type or ("video/mp4" if d.get("kind") == "video" else "audio/mp4"))
+        except Exception as e:  # noqa: BLE001
+            from core import logger
+            logger.warning("Faststart ignoré : %s", e)
     updates = {col: data.path}
     if data.duration is not None:
         updates["duration"] = data.duration
     res = sb().table("media_items").update(updates).eq("id", mid).execute()
-    return to_item(res.data[0])
+    return attach_stream_urls([to_item(res.data[0])])[0]
 
 
 @router.patch("/media/{mid}", response_model=MediaItem)

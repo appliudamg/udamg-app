@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
 import { colors, radius, spacing } from "./theme";
+import { Check, Info, X } from "lucide-react-native";
 
 type ToastKind = "success" | "error" | "info";
 type Toast = { id: string; kind: ToastKind; message: string };
@@ -34,9 +35,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             ]}
             testID={`toast-${t.kind}`}
           >
-            <Text style={styles.icon}>
-              {t.kind === "success" ? "✓" : t.kind === "error" ? "✕" : "ℹ"}
-            </Text>
+            {t.kind === "success" ? <Check size={18} color="#FFF" /> : t.kind === "error" ? <X size={18} color="#FFF" /> : <Info size={18} color="#FFF" />}
             <Text style={styles.text} numberOfLines={3}>{t.message}</Text>
           </View>
         ))}

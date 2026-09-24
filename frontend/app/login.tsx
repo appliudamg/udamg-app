@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
+import { Lock } from "lucide-react-native";
 
 export default function Login() {
   const { login, denied, clearDenied } = useAuth();
@@ -51,7 +52,7 @@ export default function Login() {
   if (denied) {
     return (
       <View style={[deniedStyles.root, { paddingTop: insets.top + spacing.xxl }]}>
-        <View style={deniedStyles.iconWrap}><Text style={deniedStyles.icon}>🔒</Text></View>
+        <View style={deniedStyles.iconWrap}><Lock size={44} color={colors.brandPrimary} /></View>
         <Text style={deniedStyles.title}>Accès refusé</Text>
         <Text style={deniedStyles.msg}>{denied.message}</Text>
         {!!denied.email && (
@@ -59,7 +60,7 @@ export default function Login() {
             <Text style={deniedStyles.emailLabel}>Votre email</Text>
             <Text testID="denied-email" style={deniedStyles.emailValue} selectable>{denied.email}</Text>
             <Pressable testID="denied-copy" onPress={copyEmail} style={deniedStyles.copyBtn}>
-              <Text style={deniedStyles.copyTxt}>{copied ? "✓ Copié" : "Copier l'email"}</Text>
+              <Text style={deniedStyles.copyTxt}>{copied ? "Copié" : "Copier l'email"}</Text>
             </Pressable>
           </View>
         )}

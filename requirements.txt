@@ -5,3 +5,4 @@ PyJWT>=2.9
 pwdlib[argon2]>=0.2
 python-dotenv>=1.0
 reportlab>=4.2
+qtfaststart>=1.8
