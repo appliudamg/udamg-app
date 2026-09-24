@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { useVideoPlayer, VideoView } from "expo-video";
-import { useEvent } from "expo";
+import { IntroVideo } from "@/src/IntroVideo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
 
-const INTRO = require("../assets/video/intro.mp4");
 const MAX_INTRO_MS = 12000;
 
 export default function IntroSplash() {
@@ -17,35 +15,7 @@ export default function IntroSplash() {
   const [videoDone, setVideoDone] = useState(false);
   const navigated = useRef(false);
 
-  const player = useVideoPlayer(INTRO, (p) => {
-    p.loop = false;
-    // Autoplay is only allowed muted on the web.
-    p.muted = Platform.OS === "web";
-  });
-
-  const { status } = useEvent(player, "statusChange", { status: player.status });
-  const { isPlaying } = useEvent(player, "playingChange", { isPlaying: player.playing });
-
-  // Lance la lecture dès que le lecteur est prêt (et réessaie après montage).
-  useEffect(() => {
-    if (status === "readyToPlay" && !isPlaying) {
-      try { player.play(); } catch {}
-    }
-  }, [status, isPlaying, player]);
-
-  useEffect(() => {
-    const t = setTimeout(() => { try { player.play(); } catch {} }, 300);
-    return () => clearTimeout(t);
-  }, [player]);
-
-  useEffect(() => {
-    const sub = player.addListener("playToEnd", () => setVideoDone(true));
-    return () => sub.remove();
-  }, [player]);
-
-  useEffect(() => {
-    if (status === "error") setVideoDone(true);
-  }, [status]);
+  const onVideoDone = useCallback(() => setVideoDone(true), []);
 
   // Sécurité : ne jamais bloquer l'utilisateur sur l'intro.
   useEffect(() => {
@@ -61,17 +31,8 @@ export default function IntroSplash() {
 
   return (
     <View style={styles.container} testID="splash-screen">
-      <VideoView
-        player={player}
-        style={styles.video}
-        contentFit="cover"
-        nativeControls={false}
-        allowsPictureInPicture={false}
-      />
-      <Pressable
-        style={[styles.overlay, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}
-        onPress={() => { try { player.play(); } catch {} }}
-      >
+      <IntroVideo onEnd={onVideoDone} onError={onVideoDone} />
+      <View style={[styles.overlay, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]} pointerEvents="box-none">
         <Pressable
           testID="splash-skip"
           onPress={() => setVideoDone(true)}
@@ -84,14 +45,13 @@ export default function IntroSplash() {
           <Text style={styles.brand} testID="splash-app-name">UDAMG</Text>
           <Text style={styles.slogan} testID="splash-slogan">Sauvé par Grâce pour Sauver</Text>
         </View>
-      </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceInverse },
-  video: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
   overlay: { flex: 1, justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: spacing.xl },
   skip: {
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill,
