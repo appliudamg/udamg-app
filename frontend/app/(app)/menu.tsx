@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, ImageBackground } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ImageBackground, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +30,7 @@ export default function MenuPrincipal() {
       <View style={styles.header}>
         <View>
           <Text style={styles.hello}>Bonjour {user?.prenom}</Text>
-          <Text style={styles.title}>UDAMG APP</Text>
+          <Image source={require("../../assets/images/logo_udamg.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="UDAMG" testID="menu-logo" />
           {!!user && <Text style={styles.role}>{roleLabel(user.role)}</Text>}
         </View>
         <Pressable
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
   },
   hello: { color: colors.muted, fontSize: 13 },
-  title: { color: colors.onSurface, fontSize: 24, fontWeight: "800", marginTop: 2 },
+  logo: { width: 150, height: 66, marginTop: 4, marginLeft: -6 },
   role: { color: colors.brandPrimary, fontSize: 12, fontWeight: "700", marginTop: 2 },
   avatar: {
     width: 44, height: 44, borderRadius: radius.pill,

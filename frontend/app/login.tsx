@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Image,
   View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
   Platform, ActivityIndicator, ScrollView, Clipboard as RNClipboard,
 } from "react-native";
@@ -85,7 +86,7 @@ export default function Login() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.brand} testID="login-brand">UDAMG</Text>
+          <Image source={require("../assets/images/logo_udamg.png")} style={styles.brandLogo} resizeMode="contain" accessibilityLabel="UDAMG" testID="login-brand" />
           <Text style={styles.slogan}>Sauvé par Grâce pour Sauver</Text>
         </View>
 
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { paddingHorizontal: spacing.xl, gap: spacing.md },
   header: { alignItems: "center", marginBottom: spacing.xxl, gap: spacing.xs },
-  brand: { fontSize: 36, fontWeight: "800", color: colors.brandPrimary, letterSpacing: 2 },
+  brandLogo: { width: 220, height: 130, alignSelf: "center" },
   slogan: { color: colors.muted, fontStyle: "italic" },
   title: { fontSize: 28, fontWeight: "700", color: colors.onSurface },
   subtitle: { fontSize: 14, color: colors.muted, marginBottom: spacing.lg },
