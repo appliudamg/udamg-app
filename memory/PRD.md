@@ -28,6 +28,13 @@
 - **Brevo** (`backend/mailer.py`) : email d'accès automatique à la création d'un compte / réinitialisation du mot de passe (expéditeur appli.udamg@gmail.com, validé). Boutons App Store / Google Play activables via env `APP_STORE_URL` / `PLAY_STORE_URL` ; `EMAIL_SHOW_WEB_LINK=false` masque le lien web.
 - **Push** (`backend/push.py`, relais Emergent) : chaque message de la Messagerie déclenche une notification à tous les utilisateurs (lots de 100, non bloquant). Frontend : `src/push.ts` (enregistrement à chaque session), handlers dans `app/_layout.tsx`. `google-services.json` fourni (Firebase `udamg-app`, package `com.udamg.app`). `EMERGENT_PUSH_KEY=placeholder` (remplacé au déploiement Emergent). Ne fonctionne que dans un build natif (pas Expo Go / web).
 
+## Itération 17 (juin 2026)
+- Mot de passe affichable/masquable partout (`src/PasswordInput.tsx`).
+- Media : section « Ajouté récemment » ; **Pensée du jour** (`backend/pensees.py`, écran `media/pensees`, chip dans Découvrir) — création/suppression admin + équipe technique, jamais supprimée automatiquement, image optionnelle (bucket covers/pensees).
+- Événements : détail « Voir plus » (affiche, description, lieu, date, durée, horaires) + actions par rôle : Je m'inscris (tous), Copier le lien (tous sauf membre), Rappel → Messagerie + push (admin/tech), Émargement & gestion (admin/tech/pasteur), Supprimer (admin/tech/pasteur). Émargement (séances, pointage, enfants, ajout inscrits) refusé aux membre/disciple/ouvrier/leader/berger/missionnaire côté API. Fix boucle du bouton Retour.
+- Icônes Lucide partout (plus d'émojis) ; streaming direct via `stream_url` signée + faststart MP4 ; Stories (équipe technique).
+- En attente : logo officiel (fichier PNG) pour remplacer le texte « UDAMG APP » sur le menu.
+
 ## Comptes : voir `memory/test_credentials.md`
 ## Reste à faire
 - Supabase plan Pro actif, limite d'upload relevée ; les 3 médias historiques sont complets.
