@@ -1,0 +1,46 @@
+{
+  "summary": "Iter17 UDAMG — Pensées + Événements duree/horaires/rappel + émargement gating + admin/users gating + password toggle + Ajouté récemment. Backend: 21/21 tests PASS in /app/backend/tests/test_iter17_pensees_events.py. CRITICAL BUG FOUND & FIXED in backend/pensees.py: PenseeIn model had `date: Optional[date]` where the field name shadowed the `from datetime import date` import → Pydantic 2.13 resolved the annotation as `None`, making the API return 422 'none_required' whenever the frontend sent `date`. Frontend UI ALWAYS sends today's date string, so pensée creation was 100% broken from the UI. Fix: `from datetime import date as _date` and updated all usages. Verified: POST /api/pensees with {theme, date:'2026-01-15'} now returns 201 with correct persisted date. Frontend UI verified: (1) Login password toggle testID login-password-input-toggle flips input type password↔text; (2) Membre login → /evenements → tap evt-open-{id} → detail shows event-register only (copy-link/rappel/emargement/delete correctly hidden); event-detail-back returns to list; evenements-back returns to /menu (NO loop); (3) Technique event detail shows all 5 actions (register, copy-link, rappel, emargement, delete); (4) Menu for technique has NO 'Équipe & Utilisateurs' card (verified via full-text scan) — admin has it; (5) Media/discover has 'Pensée du jour' chip testID cat-pensee → routes to /media/pensees; (6) Media/pensees: membre has no pensee-add button, technique has it; created 'TEST_UI_AfterFix2' pensée end-to-end via UI, verified visible in list with date, deleted via pensee-delete-{id} button — list refreshed correctly; (7) Media home shows 'Ajouté récemment' section text present. Backend émargement RBAC verified: POST /event/sessions/start membre→403 pasteur→201; POST /event/pointages membre→403; POST /event/participants (auth) membre→403; POST /event/participants/public without auth→201. Rappel: POST /evenements/{id}/rappel admin→201 with {message_id, recipients>=1}, pasteur→403; verified message 'Rappel : TEST_iter17_event' appears in GET /messages then deleted. Events: POST /evenements as technique with duree='3 jours', horaires='Ven 19h · Sam 9h-18h' → 201 with fields echoed; PATCH horaires → 200 + persisted. GET /admin/users technique→403, admin→200. All TEST_ data cleaned up; 4 seed accounts + 3 media items + PG MJAC event untouched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "shared Supabase python client (core.sb)", "issue": "Still not thread-safe with pytest -n>1 (httpx.RemoteProtocolError). Same carry-over from iter15/16. Run with -n 0."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow*/textShadow* style props", "issue": "Console warnings persist (RN 0.79+ 'shadow*' style props are deprecated. Use \"boxShadow\"'). Non-blocking, carried over from iter16."},
+      {"component": "props.pointerEvents", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' — likely on LinearGradient overlay in evenements detail hero. Non-blocking, carried over."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_pensees_events.py",
+    "/app/test_reports/pytest/pytest_iter17.xml"
+  ],
+  "action_items": [
+    "Bug fix has been applied to /app/backend/pensees.py (name shadowing on `date`). Please review and keep the pattern (import as `_date`) so the same trap doesn't reappear. No further action required for iter17 features.",
+    "(low, carry-over) Investigate Supabase python client thread-safety; keep pytest at -n 0 for iter15/16/17 suites."
+  ],
+  "critical_code_review_comments": [
+    "pensees.py: fixed Python name shadowing bug — field name `date` was hiding the `datetime.date` type in Pydantic 2.13, causing all POST /api/pensees with a date payload to return 422. Renamed import to `_date` (aliased) in 3 places. Same anti-pattern should be avoided elsewhere; a lint rule could catch it.",
+    "events.py send_rappel correctly gates on EDITORIAL_ROLES (admin+technique) and uses broadcast_push (best-effort) after inserting the message row. Message appears in GET /messages for all users — good.",
+    "events.py list_evenements returns all events without filter — verified sole 'PG MJAC' event visible to membre. Sort by date ASC — correct for upcoming list ordering.",
+    "evenements/[id].tsx uses `router.canGoBack() ? router.back() : router.replace('/(app)/evenements')` for event-detail-back — good fallback preventing dead-end. evenements/index.tsx uses `router.replace('/(app)/menu')` for evenements-back — verified goes to menu without loop.",
+    "PasswordInput.tsx is clean (34 lines), uses controlled visible state, testID prop propagates as `${testID}-toggle`. All password fields in the app now share this component. Icon color from theme.muted for consistency.",
+    "pensees.tsx frontend correctly gates the 'Ajouter' button and delete via canEditPensees(role); web platform uses window.confirm for delete (via confirmAction helper).",
+    "roles.ts canShareEventLink returns true for all roles except 'membre' — verified via UI (membre sees only 'Je m'inscris', technique sees all).",
+    "MINOR: The pensée date defaults to `_date.today()` server-side (in UTC) — frontend sends the client's local calendar day which may differ from server UTC. Non-blocking but worth noting for edge cases around midnight."
+  ],
+  "updated_files": [
+    "/app/backend/pensees.py (fixed date name-shadowing bug: aliased import as _date; updated 3 usage sites)",
+    "/app/backend/tests/test_iter17_pensees_events.py (new — 21 tests)"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% of critical iter17 flows verified via web preview"},
+  "seed_data_creation": "Test data created & fully cleaned up: 4 pensées (TEST_Pensée admin/tech, TEST_with_date, TEST_UI_AfterFix, TEST_UI_AfterFix2) — all deleted via DELETE /pensees/{id}. 1 event (TEST_iter17_event) with 1 public participant and 1 rappel message + 1 session — all deleted at end. No test data remaining. 4 seed accounts, 3 media items, PG MJAC event preserved.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL: https://church-connect-255.preview.emergentagent.com/api. Auth response field is `access_token` (NOT `token`). Reuse /app/backend/tests/test_iter17_pensees_events.py. Run with `pytest -n 0 --dist no` (Supabase client not thread-safe). All iter17 features working after the pensée date bug fix. New testIDs stable: login-password-input-toggle, user-form-password-toggle, pwd-current-toggle, pwd-new-toggle, cat-pensee, pensee-add/theme/texte/date/publish/cancel/pick-image, pensee-delete-{id}, evt-open-{id}, event-detail-back, evenements-back, event-register, event-copy-link, event-rappel, event-emargement, event-delete, create-duree, create-horaires, create-image. Watch out for Python name shadowing (`date` field vs `datetime.date` import) — pattern was found & fixed here. Console warnings 'shadow*/textShadow*' and 'pointerEvents' still present (deprecations, non-blocking).",
+  "rca_of_issue": "ROOT CAUSE: /app/backend/pensees.py defined `PenseeIn.date: Optional[date] = None` where field name `date` was identical to the imported `datetime.date` class. Under Pydantic 2.13 (used here), the annotation lookup resolved `date` to a self-referential/unresolvable name, effectively typing the field as `Optional[None]` → the validator only accepted `None` and rejected any string with error `none_required` (HTTP 422). REPRO: `curl -X POST /api/pensees -d '{\"theme\":\"x\",\"date\":\"2026-01-15\"}'` returns 422 `{'type':'none_required','loc':['body','date'],'msg':'Input should be None'}`. Any frontend POST from /media/pensees was 100% broken since the modal always sends today's date. FIX: renamed the import to `from datetime import date as _date` and updated the three usage sites (`Optional[_date]` annotation, `_date.today()` in `today()` and `create_pensee`). Verified: POST with date now returns 201; POST without date defaults to server today; POST with `date:null` still allowed. Same fix pattern recommended to avoid recurrence."
+}

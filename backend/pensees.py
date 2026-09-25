@@ -1,5 +1,5 @@
 """Pensée du jour — contenus éditoriaux (Équipe technique + Admin), jamais supprimés automatiquement."""
-from datetime import date
+from datetime import date as _date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,7 +26,7 @@ class Pensee(BaseModel):
 class PenseeIn(BaseModel):
     theme: str
     texte: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[_date] = None
     image_path: Optional[str] = None
 
 
@@ -48,7 +48,7 @@ def list_pensees(_=Depends(current_user)):
 
 @router.get("/pensees/today", response_model=Optional[Pensee])
 def today(_=Depends(current_user)):
-    res = sb().table("pensees").select("*").lte("date", date.today().isoformat()).order("date", desc=True).limit(1).execute()
+    res = sb().table("pensees").select("*").lte("date", _date.today().isoformat()).order("date", desc=True).limit(1).execute()
     return _to(res.data[0]) if res.data else None
 
 
@@ -65,7 +65,7 @@ def create_pensee(data: PenseeIn, user=Depends(edit_dep)):
     if not data.theme.strip():
         raise HTTPException(400, "Thème requis")
     row = {"id": new_id(), "theme": data.theme.strip(), "texte": (data.texte or "").strip() or None,
-           "date": (data.date or date.today()).isoformat(), "image_path": data.image_path,
+           "date": (data.date or _date.today()).isoformat(), "image_path": data.image_path,
            "created_by": user["id"], "created_at": now_iso()}
     return _to(sb().table("pensees").insert(row).execute().data[0])
 
