@@ -28,7 +28,7 @@ export default function EventHub() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable testID="hub-back" onPress={() => router.push("/(app)/evenements")} style={styles.back}>
+        <Pressable testID="hub-back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(app)/evenements"))} style={styles.back}>
           <Text style={styles.backTxt}>‹</Text>
         </Pressable>
         <View style={{ flex: 1 }}>

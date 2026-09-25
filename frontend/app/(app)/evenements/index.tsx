@@ -11,7 +11,7 @@ import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api, Evenement, eventTypeLabel } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
-import { canManageEvents, canAdminEvents } from "@/src/roles";
+import { canManageEvents, canAdminEvents, canShareEventLink } from "@/src/roles";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -37,7 +37,7 @@ export default function EvenementsList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [f, setF] = useState({
     titre: "", description: "", lieu: "", ville: "",
-    type_evenement: "culte_special", date: "",
+    type_evenement: "culte_special", date: "", duree: "", horaires: "", image_url: "",
   });
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -55,12 +55,13 @@ export default function EvenementsList() {
         type_evenement: f.type_evenement,
         date: new Date(f.date).toISOString(),
         intervenants: [],
+        duree: f.duree || null, horaires: f.horaires || null, image_url: f.image_url || null,
       }),
     }, token),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["evenements"] });
       setCreateOpen(false);
-      setF({ titre: "", description: "", lieu: "", ville: "", type_evenement: "culte_special", date: "" });
+      setF({ titre: "", description: "", lieu: "", ville: "", type_evenement: "culte_special", date: "", duree: "", horaires: "", image_url: "" });
       toast.show("Programme créé", "success");
     },
     onError: (e: any) => toast.show(e?.message || "Erreur création", "error"),
@@ -125,7 +126,7 @@ export default function EvenementsList() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable testID="evenements-back" onPress={() => router.back()} style={styles.back}>
+        <Pressable testID="evenements-back" onPress={() => router.replace("/(app)/menu")} style={styles.back}>
           <Text style={styles.backTxt}>‹</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -174,7 +175,8 @@ export default function EvenementsList() {
             return (
               <View style={styles.card} testID={`evenement-card-${item.id}`}>
                 <Pressable
-                  onPress={() => router.push(`/(app)/event/${item.id}/hub?titre=${encodeURIComponent(item.titre)}`)}
+                  testID={`evt-open-${item.id}`}
+                  onPress={() => router.push(`/(app)/evenements/${item.id}`)}
                   style={({ pressed }) => [styles.cardMain, pressed && { opacity: 0.9 }]}
                 >
                   <View style={styles.datePill}>
@@ -186,17 +188,26 @@ export default function EvenementsList() {
                     <Text style={styles.cardTitle} numberOfLines={2}>{item.titre}</Text>
                     <Text style={styles.cardMeta}>{item.lieu}{item.ville ? ` · ${item.ville}` : ""}</Text>
                     <Text style={styles.cardMeta}>{formatDate(item.date)}</Text>
-                    <Text style={styles.openHub}>Ouvrir le système d'émargement →</Text>
+                    <Text style={styles.openHub}>Voir plus →</Text>
                   </View>
                 </Pressable>
                 <View style={styles.cardActions}>
                   <Pressable
-                    testID={`evt-share-${item.id}`}
-                    onPress={() => shareLink(item)}
-                    style={[styles.cardBtn, { backgroundColor: colors.brandTertiary }]}
+                    testID={`evt-register-${item.id}`}
+                    onPress={() => router.push(`/inscription?event=${item.id}&titre=${encodeURIComponent(item.titre)}`)}
+                    style={[styles.cardBtn, { backgroundColor: colors.brandPrimary }]}
                   >
-                    <Text style={[styles.cardBtnTxt, { color: colors.brandPrimary }]}>Lien d'inscription</Text>
+                    <Text style={[styles.cardBtnTxt, { color: colors.onBrandPrimary }]}>Je m&apos;inscris</Text>
                   </Pressable>
+                  {canShareEventLink(user?.role) && (
+                    <Pressable
+                      testID={`evt-share-${item.id}`}
+                      onPress={() => shareLink(item)}
+                      style={[styles.cardBtn, { backgroundColor: colors.brandTertiary }]}
+                    >
+                      <Text style={[styles.cardBtnTxt, { color: colors.brandPrimary }]}>Copier le lien</Text>
+                    </Pressable>
+                  )}
                   {isPasteur && (
                     <Pressable
                       testID={`evt-delete-${item.id}`}
@@ -231,6 +242,18 @@ export default function EvenementsList() {
                          placeholderTextColor={colors.muted}
                          value={f.ville} onChangeText={t => setF({ ...f, ville: t })}
                          style={styles.input} />
+              <TextInput testID="create-duree" placeholder="Durée (ex. 3 jours, 2h)"
+                         placeholderTextColor={colors.muted}
+                         value={f.duree} onChangeText={t => setF({ ...f, duree: t })}
+                         style={styles.input} />
+              <TextInput testID="create-horaires" placeholder="Horaires & détails du programme (ex. Ven 19h · Sam 9h-18h)"
+                         placeholderTextColor={colors.muted}
+                         value={f.horaires} onChangeText={t => setF({ ...f, horaires: t })}
+                         style={[styles.input, { minHeight: 72 }]} multiline />
+              <TextInput testID="create-image" placeholder="Lien de l'affiche / logo (optionnel, https://…)"
+                         placeholderTextColor={colors.muted}
+                         value={f.image_url} onChangeText={t => setF({ ...f, image_url: t })}
+                         style={styles.input} autoCapitalize="none" />
               <TextInput testID="create-date" placeholder="Date ISO (2026-03-15T20:00)"
                          placeholderTextColor={colors.muted}
                          value={f.date} onChangeText={t => setF({ ...f, date: t })}

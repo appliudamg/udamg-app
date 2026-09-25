@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { colors, spacing, radius } from "@/src/theme";
 import { Lock } from "lucide-react-native";
+import { PasswordInput } from "@/src/PasswordInput";
 
 export default function Login() {
   const { login, denied, clearDenied } = useAuth();
@@ -107,14 +108,13 @@ export default function Login() {
 
         <View style={styles.field}>
           <Text style={styles.label}>Mot de passe</Text>
-          <TextInput
+          <PasswordInput
             testID="login-password-input"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
             placeholder="••••••••"
             placeholderTextColor={colors.muted}
-            style={styles.input}
+            inputStyle={styles.input}
           />
         </View>
 

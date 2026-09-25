@@ -12,6 +12,7 @@ import { mediaTheme, categoryHue } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
+import { Sparkles } from "lucide-react-native";
 
 const KIND_FILTERS: { key: string; label: string }[] = [
   { key: "all", label: "Tout" },
@@ -104,6 +105,10 @@ export default function Discover() {
       >
         <Pressable onPress={() => { setCategory(null); setSubcategory(null); }} style={[styles.chip, !category && styles.chipOn]}>
           <Text style={[styles.chipTxt, !category && styles.chipTxtOn]}>Toutes catégories</Text>
+        </Pressable>
+        <Pressable testID="cat-pensee" onPress={() => router.push("/(app)/media/pensees" as any)} style={[styles.chip, { borderColor: mediaTheme.gold, flexDirection: "row", alignItems: "center", gap: 6 }]}>
+          <Sparkles size={14} color={mediaTheme.gold} />
+          <Text style={[styles.chipTxt, { color: mediaTheme.gold }]}>Pensée du jour</Text>
         </Pressable>
         {(cats.data?.categories ?? []).map((c) => (
           <Pressable

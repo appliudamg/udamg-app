@@ -14,9 +14,10 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import (
-    EVENT_ADMIN_ROLES, EVENT_MANAGE_ROLES, PublicUser, current_user, display_name,
+    EDITORIAL_ROLES, EVENT_ADMIN_ROLES, EVENT_MANAGE_ROLES, PublicUser, current_user, display_name,
     new_id, now_iso, public_user, require_role, sb,
 )
+from push import broadcast_push
 
 router = APIRouter(prefix="/api")
 manage_dep = require_role(*EVENT_MANAGE_ROLES)
@@ -54,6 +55,8 @@ class Evenement(BaseModel):
     type_evenement: str
     intervenants: List[str] = []
     image_url: Optional[str] = None
+    duree: Optional[str] = None
+    horaires: Optional[str] = None
     created_by: Optional[str] = None
     created_at: str
 
@@ -67,6 +70,21 @@ class EvenementCreate(BaseModel):
     type_evenement: str
     intervenants: List[str] = []
     image_url: Optional[str] = None
+    duree: Optional[str] = None
+    horaires: Optional[str] = None
+
+
+class EvenementUpdate(BaseModel):
+    titre: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[datetime] = None
+    lieu: Optional[str] = None
+    ville: Optional[str] = None
+    type_evenement: Optional[str] = None
+    intervenants: Optional[List[str]] = None
+    image_url: Optional[str] = None
+    duree: Optional[str] = None
+    horaires: Optional[str] = None
 
 
 class InvitationCreate(BaseModel):
@@ -137,7 +155,8 @@ def _evt(d: dict) -> Evenement:
     return Evenement(
         id=d["id"], titre=d["titre"], description=d.get("description"), date=d["date"], lieu=d.get("lieu", ""),
         ville=d.get("ville"), type_evenement=d.get("type_evenement", ""), intervenants=d.get("intervenants") or [],
-        image_url=d.get("image_url"), created_by=d.get("created_by"), created_at=d["created_at"],
+        image_url=d.get("image_url"), duree=d.get("duree"), horaires=d.get("horaires"),
+        created_by=d.get("created_by"), created_at=d["created_at"],
     )
 
 
@@ -211,6 +230,41 @@ def create_evenement(data: EvenementCreate, user=Depends(manage_dep)):
     return _evt(res.data[0])
 
 
+@router.patch("/evenements/{eid}", response_model=Evenement)
+def update_evenement(eid: str, data: EvenementUpdate, _=Depends(manage_dep)):
+    _get_event_or_404(eid)
+    updates = data.model_dump(exclude_unset=True)
+    if "date" in updates and updates["date"] is not None:
+        updates["date"] = updates["date"].isoformat()
+    if not updates:
+        raise HTTPException(400, "Aucune modification")
+    res = sb().table("evenements").update(updates).eq("id", eid).execute()
+    return _evt(res.data[0])
+
+
+class RappelIn(BaseModel):
+    message: Optional[str] = None
+
+
+@router.post("/evenements/{eid}/rappel", status_code=201)
+def send_rappel(eid: str, data: RappelIn, user=Depends(require_role(*EDITORIAL_ROLES))):
+    """Envoie un rappel de l'événement dans la Messagerie de tous les utilisateurs (+ notification push)."""
+    evt = _get_event_or_404(eid)
+    d = datetime.fromisoformat(evt["date"].replace("Z", "+00:00"))
+    when = d.strftime("%d/%m/%Y à %H:%M")
+    title = f"Rappel : {evt['titre']}"
+    body = (data.message or "").strip() or (
+        f"Rendez-vous le {when} — {evt.get('lieu', '')}{(' · ' + evt['ville']) if evt.get('ville') else ''}."
+        + (f"\n{evt['description']}" if evt.get("description") else "")
+    )
+    row = {"id": new_id(), "sender_id": user["id"], "sender_name": display_name(user),
+           "title": title, "body": body, "created_at": now_iso()}
+    sb().table("messages").insert(row).execute()
+    recipients = sb().table("users").select("id").eq("disabled", False).eq("is_approved", True).execute().data
+    broadcast_push([u["id"] for u in recipients], title=title, message=body, action_url=f"/(app)/messages/{row['id']}", key=f"rappel-{row['id']}")
+    return {"message_id": row["id"], "recipients": len(recipients)}
+
+
 @router.delete("/evenements/{eid}", status_code=204)
 def delete_evenement(eid: str, _=Depends(admin_dep)):
     _get_event_or_404(eid)
@@ -268,7 +322,7 @@ def _insert_participant(data, referent: Optional[str], notes: Optional[str]) -> 
 
 
 @router.post("/event/participants", status_code=201)
-def create_participant(data: ParticipantIn, user=Depends(current_user)):
+def create_participant(data: ParticipantIn, user=Depends(manage_dep)):
     return _insert_participant(data, data.referent or display_name(user), data.notes)
 
 
@@ -309,7 +363,7 @@ def get_participant(pid: str, _=Depends(current_user)):
 
 
 @router.patch("/event/participants/{pid}")
-def update_participant(pid: str, data: ParticipantUpdate, _=Depends(current_user)):
+def update_participant(pid: str, data: ParticipantUpdate, _=Depends(manage_dep)):
     updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
     if "nom" in updates:
         updates["nom"] = updates["nom"].strip().upper()
@@ -367,7 +421,7 @@ def stop_session(sid: str, _=Depends(manage_dep)):
 # Pointages (QR)
 # --------------------------------------------------------------------------- #
 @router.post("/event/pointages", status_code=201)
-def create_pointage(data: PointageIn, user=Depends(current_user)):
+def create_pointage(data: PointageIn, user=Depends(manage_dep)):
     active = _active_session(data.evenement_id)
     if not active:
         raise HTTPException(423, "Aucune séance active — un responsable doit démarrer une séance")
@@ -397,7 +451,7 @@ def list_pointages(evenement_id: str, session_id: Optional[str] = None, limit: i
 # Compteur enfants
 # --------------------------------------------------------------------------- #
 @router.post("/event/enfants")
-def add_enfants(data: EnfantsIn, user=Depends(current_user)):
+def add_enfants(data: EnfantsIn, user=Depends(manage_dep)):
     active = _active_session(data.evenement_id)
     if not active:
         raise HTTPException(423, "Aucune séance active")

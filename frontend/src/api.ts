@@ -24,7 +24,13 @@ export type Evenement = {
   id: string; titre: string; description?: string | null;
   date: string; lieu: string; ville?: string | null;
   type_evenement: string; intervenants: string[];
-  image_url?: string | null; created_by?: string | null; created_at: string;
+  image_url?: string | null; duree?: string | null; horaires?: string | null;
+  created_by?: string | null; created_at: string;
+};
+
+export type Pensee = {
+  id: string; theme: string; texte?: string | null; date: string;
+  image_path?: string | null; image_url?: string | null; created_by?: string | null; created_at: string;
 };
 
 export type Invitation = {

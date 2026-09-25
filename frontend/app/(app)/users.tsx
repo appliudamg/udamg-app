@@ -11,6 +11,7 @@ import { api, ROLES, Role, User, roleLabel, normalize } from "@/src/api";
 import { useToast } from "@/src/toast";
 import { confirmAction } from "@/src/confirm";
 import { colors, spacing, radius } from "@/src/theme";
+import { PasswordInput } from "@/src/PasswordInput";
 
 type FormState = { email: string; nom: string; prenom: string; role: Role; password: string };
 const EMPTY: FormState = { email: "", nom: "", prenom: "", role: "membre", password: "" };
@@ -167,7 +168,7 @@ export default function UsersAdmin() {
             <TextInput testID="user-form-email" value={f.email} editable={open?.mode === "create"} onChangeText={(t) => setF({ ...f, email: t })} style={[styles.input, open?.mode === "edit" && { opacity: 0.6 }]} autoCapitalize="none" keyboardType="email-address" placeholder="email@exemple.com" placeholderTextColor={colors.muted} />
             <Text style={styles.label}>{open?.mode === "create" ? "Mot de passe (min. 6 caractères)" : "Nouveau mot de passe (optionnel)"}</Text>
             <Text style={styles.help}>La personne recevra automatiquement un email avec le lien de l&apos;application, son identifiant et ce mot de passe.</Text>
-            <TextInput testID="user-form-password" value={f.password} onChangeText={(t) => setF({ ...f, password: t })} style={styles.input} secureTextEntry placeholder="••••••••" placeholderTextColor={colors.muted} />
+            <PasswordInput testID="user-form-password" value={f.password} onChangeText={(t) => setF({ ...f, password: t })} inputStyle={styles.input} placeholder="••••••••" placeholderTextColor={colors.muted} />
 
             <Text style={styles.label}>Rôle</Text>
             <View style={styles.roles}>

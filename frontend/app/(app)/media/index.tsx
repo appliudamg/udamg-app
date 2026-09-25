@@ -97,6 +97,18 @@ export default function MediaHome() {
             </ScrollView>
           )}
 
+          {/* Ajouté récemment : fil mixant audios et vidéos */}
+          {(media.data?.length ?? 0) > 0 && (
+            <Section title="Ajouté récemment">
+              {[...(media.data ?? [])]
+                .sort((a, b) => b.created_at.localeCompare(a.created_at))
+                .slice(0, 10)
+                .map((it) => (
+                  <MediaCard key={it.id} item={it} onPress={() => onPlay(it, media.data)} />
+                ))}
+            </Section>
+          )}
+
           {/* Continue listening */}
           {(cont.data?.length ?? 0) > 0 && (
             <Section title="Continuer l'écoute">

@@ -9,6 +9,7 @@ import { canReadRestrictedMedia, canSendMessages, canWriteMedia, canManageUsers,
 import { useToast } from "@/src/toast";
 import { colors, spacing, radius } from "@/src/theme";
 import { Check, Minus } from "lucide-react-native";
+import { PasswordInput } from "@/src/PasswordInput";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -64,8 +65,8 @@ export default function Profile() {
 
         <Text style={styles.section}>Changer mon mot de passe</Text>
         <View style={styles.box}>
-          <TextInput testID="pwd-current" value={cur} onChangeText={setCur} secureTextEntry placeholder="Mot de passe actuel" placeholderTextColor={colors.muted} style={styles.input} />
-          <TextInput testID="pwd-new" value={next} onChangeText={setNext} secureTextEntry placeholder="Nouveau mot de passe (min. 6)" placeholderTextColor={colors.muted} style={styles.input} />
+          <PasswordInput testID="pwd-current" value={cur} onChangeText={setCur} placeholder="Mot de passe actuel" placeholderTextColor={colors.muted} inputStyle={styles.input} />
+          <PasswordInput testID="pwd-new" value={next} onChangeText={setNext} placeholder="Nouveau mot de passe (min. 6)" placeholderTextColor={colors.muted} inputStyle={styles.input} />
           <Pressable testID="pwd-save" disabled={!cur || next.length < 6 || change.isPending} onPress={() => change.mutate()} style={({ pressed }) => [styles.cta, (!cur || next.length < 6 || pressed) && { opacity: 0.7 }]}>
             {change.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.ctaTxt}>Mettre à jour</Text>}
           </Pressable>

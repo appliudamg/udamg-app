@@ -1,0 +1,44 @@
+{
+  "summary": "Iter16 UDAMG — Stories feature + /media stream_url + MP4 faststart. Backend: 19/19 iter16 tests PASS (Stories RBAC: technique-only publish, membre/admin 403 on create; create-json 201; upload-url + PUT to Supabase 200; confirm sets public URL under /storage/v1/object/public/stories/; membre GET /stories sees viewed=false→true after POST /view; technique GET /viewers lists membre with name+role; membre GET /viewers 403; PATCH caption 200; DELETE 204). Media: every item with audio_path has non-empty stream_url pointing to https://olehhoovstiheycdarhs.supabase.co/storage/v1/object/sign/media/; Range 0-2047 request returns 206 and 'moov' atom found before 'mdat' in first 2KB (faststart verified for mp4/m4a); GET /media/{id} also includes stream_url; regression create/upload/confirm/delete flow works with tiny mp3. 30/30 iter15 regression suite also passing. Frontend (390x844): technique login → menu has 0 emojis, all icons SVG (Lucide); Media home shows 'Stories' section with dashed 'Publier' circle (testID story-add) for technique; clicking opens /media/story-new which renders 'Nouvelle story' with Photo / Vidéo pickers, caption input, 24h/48h/72h chips, and 'Publier la story' correctly disabled (aria-disabled=true) until a file is picked; back returns to Media home. Existing story circle (TEST_UI_story created via API) visible in strip; clicking opens full-screen viewer (testID stories-viewer) with progress bars, author name 'Équipe Technique UDAMG', close (X, story-close) and delete (Trash, story-delete) buttons for technique; close returns to Media home. Membre login → NO story-add circle, viewer opens without delete button (delete count = 0). Player: opening a video item opens VideoScreen (no Sommeil — expected for video kind); audio path/URL: `<audio>/<video>` src is a supabase.co signed URL (https://olehhoovstiheycdarhs.supabase.co/storage/v1/object/sign/media/...?token=…) — NOT /api/media/.../file (regression fix confirmed). PlayerModal audio branch (code inspection) uses Lucide Moon+Play+Pause icons, Sommeil label with Moon icon (no 😴). Bottom nav in Media renders SVG icons (Accueil / Découvrir / Bibliothèque). Regression: Événements admin page 0 emojis, Équipe & Utilisateurs page 0 emojis, Messagerie compose+rows working (emojis found there are inside user-generated message bodies, not UI). 3 existing media items, PG MJAC event, 4 seed accounts preserved. TEST_UI_story cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "shared Supabase python client (core.sb)", "issue": "Still not thread-safe when pytest runs with -n>1 (httpx.RemoteProtocolError). Same issue as iter15. Run pytest with -n 0 for iter15/iter16 suites (pytest.ini default is -n 2 which fails). Recommend using thread-local supabase clients or async client."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PlayerModal audio controls glyph icons", "issue": "The audio player still uses Unicode text glyphs '⌄' (player-close, U+02C7), '⏮' (player-prev, U+23EE), '⏭' (player-next, U+23ED) instead of Lucide SVG icons. Request stated 'all emojis replaced by Lucide SVG icons' including media player. Play/Pause/Moon/Heart are already Lucide — replace ChevronDown, SkipBack, SkipForward for full consistency. Reference: /app/frontend/src/media/PlayerModal.tsx:52,113,125.", "testID": "player-close, player-prev, player-next", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* / textShadow* style props", "issue": "Console warnings persist: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' and '\"textShadow*\" style props are deprecated. Use \"textShadow\".' (RN 0.79+). Non-blocking. Multiple screens."},
+      {"component": "props.pointerEvents", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' (likely LinearGradient overlays / absoluteFillObject). Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter16_stories_stream.py",
+    "/app/test_reports/pytest/pytest_iter16_v2.xml"
+  ],
+  "action_items": [
+    "(low) Replace remaining text-glyph controls in PlayerModal audio branch with Lucide icons: '⌄' → ChevronDown (player-close), '⏮' → SkipBack (player-prev), '⏭' → SkipForward (player-next) to fully match the 'no emoji' cleanup contract.",
+    "(low, carried over from iter15) Investigate Supabase python client thread-safety; keep pytest at -n 0 for iter15/iter16 suites."
+  ],
+  "critical_code_review_comments": [
+    "backend/stories.py is 152 lines, clean and self-contained; correct RBAC via write_dep = require_role(*MEDIA_WRITE_ROLES); list_stories filters expired via gt('expires_at', now_iso()) and hides stories without media_path (not_.is_('media_path', 'null')) — good. Author names batched via single IN query. View tracking via story_views upsert with on_conflict='story_id,user_id' + ignore_duplicates — correct idempotence.",
+    "media.py attach_stream_urls uses create_signed_urls (batch) with 6h TTL — efficient, one round-trip for the whole list. Falls back gracefully if signature fails (logs warning). Good.",
+    "media.py faststart_in_place uses qtfaststart processor with local tempfiles and re-uploads with upsert=true; only runs for mp4/m4a/m4v/mov and returns silently if already optimized. Correct approach; wrapped in try/except in confirm_upload so upload confirmation never fails on faststart error.",
+    "PlayerModal.tsx correctly branches: audio uses Lucide Moon/Play/Pause/Heart icons; video uses VideoScreen. Audio src uses item.stream_url || mediaFileUrl(item.id, token!) — falls back gracefully if stream_url missing. Sommeil label + Moon icon composition is clean.",
+    "StoriesStrip.tsx correctly hides the entire strip when neither canPublish nor any story is present; uses LinearGradient ring for unread (gold→ruby) vs viewed (grey border) — nice UX.",
+    "stories.tsx viewer: markView mutation invalidates ['stories'] on success — the strip will refresh viewed=true. Long-press pauses image timer via onPressOut cleanup. Good.",
+    "story-new.tsx correctly gates entire screen for non-technique with early return + explanation text; on web platform correctly uses fetch(uri).blob() fallback when picker doesn't yield a File object. iOS/Android path uses FileSystem.uploadAsync BINARY_CONTENT — correct."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (19/19 iter16 + 30/30 iter15 sequential)", "frontend": "100% of critical flows (menu emojis cleanup, stories strip visibility per role, story-new screen renders, viewer opens with correct role-based buttons, player uses signed Supabase URL, régression pages sans emojis)"},
+  "seed_data_creation": "None persistent. TEST_UI_story (Story with tiny 1x1 PNG uploaded to Supabase Storage) created for UI verification, then deleted via DELETE /stories/{id} (204 confirmed). TEST_ITER16_* media/stories created & cleaned up by pytest. 0 leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL: http://localhost:8001/api (also public https://church-connect-255.preview.emergentagent.com/api). Supabase client remains NOT thread-safe — always pytest -n 0 for iter15/iter16. Reuse /app/backend/tests/test_iter16_stories_stream.py. 4 seeded accounts documented in /app/memory/test_credentials.md; DO NOT delete them, the 3 existing media items, or the PG MJAC event. All 3 seed media items are currently kind=video so the audio-mode PlayerModal (with Sommeil button) cannot be exercised via UI without creating a TEST audio item first. New testIDs available: story-add, story-{id}, stories-viewer, story-close, story-delete, story-prev, story-next, story-new-back, story-pick-image, story-pick-video, story-caption, story-hours-24/48/72, story-publish. Media player: player-close, player-prev, player-next, player-toggle, player-fav, player-sleep, player-back10, player-fwd10. Remaining minor task: convert player audio-mode text glyphs ⌄⏮⏭ to Lucide (ChevronDown/SkipBack/SkipForward).",
+  "rca_of_issue": ""
+}

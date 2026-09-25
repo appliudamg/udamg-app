@@ -83,9 +83,14 @@ RESTRICTED_SUBCATEGORIES = {"Réunion Pasteur", "Conseil élargi"}
 MESSAGE_SEND_ROLES = {ROLE_ADMIN, ROLE_TECH}
 # Utilisateurs : gestion
 USER_ADMIN_ROLES = {ROLE_ADMIN}
-# Événements : gestion (création, inscrits, séances, pointage) / administration (suppression, purge)
-EVENT_MANAGE_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR, ROLE_MISSIONNAIRE, ROLE_BERGER}
-EVENT_ADMIN_ROLES = {ROLE_ADMIN, ROLE_PASTEUR}
+# Événements : gestion & émargement (création, inscrits, séances, pointage) — jamais pour
+# Membres / Disciples / Ouvriers / Leaders / Bergers / Missionnaires
+EVENT_MANAGE_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR}
+EVENT_ADMIN_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR}
+# Copier le lien d'inscription : tous sauf Membre simple
+EVENT_SHARE_EXCLUDED = {ROLE_MEMBRE}
+# Contenus éditoriaux (Pensée du jour) : Équipe technique + Admin
+EDITORIAL_ROLES = {ROLE_ADMIN, ROLE_TECH}
 
 
 def can_read_restricted_media(user: dict) -> bool:

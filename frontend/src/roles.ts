@@ -5,8 +5,10 @@ export const MEDIA_WRITE_ROLES: Role[] = ["equipe_technique"];
 export const MEDIA_FULL_READ_ROLES: Role[] = ["admin", "equipe_technique", "pasteur", "missionnaire", "berger"];
 export const MESSAGE_SEND_ROLES: Role[] = ["admin", "equipe_technique"];
 export const USER_ADMIN_ROLES: Role[] = ["admin"];
-export const EVENT_MANAGE_ROLES: Role[] = ["admin", "equipe_technique", "pasteur", "missionnaire", "berger"];
-export const EVENT_ADMIN_ROLES: Role[] = ["admin", "pasteur"];
+// Gestion & émargement (jamais pour membre/disciple/ouvrier/leader/berger/missionnaire)
+export const EVENT_MANAGE_ROLES: Role[] = ["admin", "equipe_technique", "pasteur"];
+export const EVENT_ADMIN_ROLES: Role[] = ["admin", "equipe_technique", "pasteur"];
+export const EDITORIAL_ROLES: Role[] = ["admin", "equipe_technique"];
 
 const has = (list: Role[], role?: Role | null) => !!role && list.includes(role);
 
@@ -16,3 +18,6 @@ export const canSendMessages = (r?: Role | null) => has(MESSAGE_SEND_ROLES, r);
 export const canManageUsers = (r?: Role | null) => has(USER_ADMIN_ROLES, r);
 export const canManageEvents = (r?: Role | null) => has(EVENT_MANAGE_ROLES, r);
 export const canAdminEvents = (r?: Role | null) => has(EVENT_ADMIN_ROLES, r);
+export const canShareEventLink = (r?: Role | null) => !!r && r !== "membre";
+export const canSendRappel = (r?: Role | null) => has(EDITORIAL_ROLES, r);
+export const canEditPensees = (r?: Role | null) => has(EDITORIAL_ROLES, r);

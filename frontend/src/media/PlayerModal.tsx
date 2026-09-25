@@ -10,7 +10,7 @@ import { mediaCoverUrl, mediaFileUrl, fmtDuration } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { Heart, Moon, Pause, Play } from "lucide-react-native";
+import { ChevronDown, Heart, Moon, Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
 
 const RATES = [0.75, 1, 1.25, 1.5, 2];
 
@@ -49,7 +49,7 @@ export function PlayerModal() {
         />
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <Pressable testID="player-close" onPress={p.closePlayer} hitSlop={12}>
-            <Text style={styles.chevron}>⌄</Text>
+            <ChevronDown size={30} color={mediaTheme.text} />
           </Pressable>
           <View>
             <Text style={styles.eyebrow}>{kindLabel[item.kind] || "Audio"}</Text>
@@ -110,7 +110,7 @@ export function PlayerModal() {
 
           <View style={styles.controls}>
             <Pressable testID="player-prev" onPress={p.prev} hitSlop={12}>
-              <Text style={styles.ctrlIcon}>⏮</Text>
+              <SkipBack size={26} color={mediaTheme.text} fill={mediaTheme.text} />
             </Pressable>
             <Pressable testID="player-back10" onPress={() => p.seekBy(-10)} hitSlop={12} style={styles.jumpBtn}>
               <Text style={styles.jumpTxt}>−10</Text>
@@ -122,7 +122,7 @@ export function PlayerModal() {
               <Text style={styles.jumpTxt}>+10</Text>
             </Pressable>
             <Pressable testID="player-next" onPress={p.next} hitSlop={12}>
-              <Text style={styles.ctrlIcon}>⏭</Text>
+              <SkipForward size={26} color={mediaTheme.text} fill={mediaTheme.text} />
             </Pressable>
           </View>
 
