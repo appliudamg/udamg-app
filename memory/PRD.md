@@ -35,6 +35,21 @@
 - Icônes Lucide partout (plus d'émojis) ; streaming direct via `stream_url` signée + faststart MP4 ; Stories (équipe technique).
 - En attente : logo officiel (fichier PNG) pour remplacer le texte « UDAMG APP » sur le menu.
 
+## Itération 18 (juin 2026)
+- Profil : « Mes droits d'accès » visible uniquement admin / équipe technique (`canViewAccessRights`).
+- Menu : bloc « Je donne » → https://linktr.ee/offrandesccmgi (`src/links.ts`) ; même bouton dans le lecteur (à côté de « Sommeil ») et sous la vidéo.
+- Lecteur global : `PlayerProvider` + `MiniPlayer` + `PlayerModal` dans `app/(app)/_layout.tsx` → la lecture continue hors du bloc Media. Arrière-plan : `shouldPlayInBackground`, `interruptionMode: doNotMix`, `setActiveForLockScreen` (contrôles écran verrouillé), app.json : `UIBackgroundModes [audio, remote-notification]`, plugin expo-audio `enableBackgroundPlayback`, expo-video `supportsBackgroundPlayback`. **Build natif requis** (pas Expo Go / web).
+- Push : `enableBackgroundRemoteNotifications` (expo-notifications). Build natif requis.
+- Événements / inscriptions (`backend/events.py`, écran `app/(app)/evenements/[id]/inscrire.tsx` modes self/other/edit) :
+  - `POST /api/event/participants/me` (Je m'inscris, lié au compte : `user_id`) → badge déposé en **message privé** dans la Messagerie (`messages.recipient_id`, `action_url` → `/badge?event=&b=`) + **email Brevo** avec QR PNG en pièce jointe (`mailer.send_badge_email`).
+  - `GET /me`, `PATCH /me/{pid}`, `DELETE /me/{pid}` (Annuler → bouton « Je m'inscris » réapparaît).
+  - `POST /api/event/participants/other` (tous rôles, email bénéficiaire obligatoire) → badge par email ; `registered_by`.
+  - Détail événement : section « Inscription » dynamique (Je m'inscris | Voir mon badge / Modifier + Annuler mon inscription) + « Inscrire une autre personne ».
+  - `badge_id` = max(numéro existant)+1 (plus de collision après annulation).
+- Messagerie : `GET /messages` = diffusion + mes messages privés ; `/messages/{id}` 404 pour un autre utilisateur ; bouton « Voir mon badge » dans le détail (`action_url`).
+- Espace Pasteur : code PIN **0123** demandé à chaque ouverture (`src/event/PinLock.tsx`) ; toutes les séances supprimées (migration `002_badges_private_messages.sql`), liste vide, création manuelle uniquement.
+- Tests : `backend/tests/test_iter18_participants_me.py` 21/21, `test_reports/iteration_18.json`.
+
 ## Comptes : voir `memory/test_credentials.md`
 ## Reste à faire
 - Supabase plan Pro actif, limite d'upload relevée ; les 3 médias historiques sont complets.

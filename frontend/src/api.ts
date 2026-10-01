@@ -82,6 +82,7 @@ export type Story = {
 export type Message = {
   id: string; sender_id?: string | null; sender_name: string;
   title: string; body: string; created_at: string;
+  recipient_id?: string | null; action_url?: string | null;
   read: boolean; read_at?: string | null;
   read_count: number; recipients_count: number;
 };

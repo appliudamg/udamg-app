@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { api, roleLabel } from "@/src/api";
 import { canManageUsers } from "@/src/roles";
+import { openDonation } from "@/src/links";
 import { colors, spacing, radius } from "@/src/theme";
-import { Megaphone, Users } from "lucide-react-native";
+import { ExternalLink, HandHeart, Megaphone, Users } from "lucide-react-native";
 
 const EVENTS_IMG = "https://images.unsplash.com/photo-1570786032462-2efc3ca8fccd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjaHVyY2glMjB3b3JzaGlwJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
 const MEDIA_IMG = "https://images.unsplash.com/photo-1478147427282-58a87a120781?crop=entropy&cs=srgb&fm=jpg&w=1200&q=80";
@@ -115,6 +116,20 @@ export default function MenuPrincipal() {
             </View>
           </ImageBackground>
         </Pressable>
+
+        <Text style={styles.section}>Soutenir</Text>
+        <Pressable
+          testID="menu-don-card"
+          onPress={openDonation}
+          style={({ pressed }) => [styles.teamCard, styles.donCard, pressed && { opacity: 0.9 }]}
+        >
+          <View style={[styles.iconWrap, styles.donIcon]}><HandHeart size={24} color={colors.onBrandPrimary} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.teamTitle}>Je donne</Text>
+            <Text style={styles.teamSub}>Offrandes & dons · ouvre la page sécurisée</Text>
+          </View>
+          <ExternalLink size={18} color={colors.muted} />
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -155,6 +170,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, minHeight: 64,
   },
   iconWrap: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  donCard: { borderColor: colors.brandSecondary, marginBottom: 72 },
+  donIcon: { backgroundColor: colors.brandPrimary },
   teamTitle: { color: colors.onSurface, fontWeight: "800", fontSize: 15 },
   teamSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
   teamChev: { color: colors.muted, fontSize: 22 },

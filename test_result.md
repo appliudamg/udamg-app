@@ -120,3 +120,23 @@ frontend:
   - task: "Intro vidéo, menu, messagerie, users, profil, media admin (upload signé), rôles" ; implemented: true
 credentials: voir /app/memory/test_credentials.md
 notes: "Upload media = POST /api/media/create-json → POST /api/media/{id}/upload-url → PUT direct Supabase → POST /api/media/{id}/confirm"
+
+## Itération 18 — Dons, lecteur global, PIN Pasteur, inscriptions + badges (Juin 2026)
+user_problem_statement: >
+  1) Profil : rubrique « Mes droits d'accès » visible uniquement admin / equipe_technique.
+  2) Menu : bloc « Je donne » → https://linktr.ee/offrandesccmgi (lien externe).
+  3) Media : lecteur global (continue hors du bloc Media) + bouton « Je donne » à côté de « Sommeil » dans le lecteur.
+  4) Push natif (déjà implémenté, non testable en web).
+  5) Événements : « Je m'inscris » (POST /api/event/participants/me → badge en Messagerie privée + email Brevo) ;
+     inscrit → « Voir mon badge / Modifier » + « Annuler mon inscription » (DELETE /api/event/participants/me/{pid}) ;
+     « Inscrire une autre personne » (POST /api/event/participants/other, email obligatoire → badge par email).
+     Messages privés : GET /api/messages ne renvoie que diffusion + mes messages privés (recipient_id).
+  6) Espace Pasteur : code PIN 0123 à chaque ouverture ; séances supprimées (liste vide, création manuelle).
+backend:
+  - task: "Inscription self/other/edit/cancel + badge Messagerie/email" ; implemented: true ; file: backend/events.py, mailer.py
+  - task: "Messages privés (recipient_id, action_url)" ; implemented: true ; file: backend/messaging.py
+frontend:
+  - task: "Détail événement dynamique + écran (app)/evenements/[id]/inscrire (modes self/other/edit)" ; implemented: true
+  - task: "PinLock Espace Pasteur (0123)" ; implemented: true ; file: src/event/PinLock.tsx, app/(app)/event/[id]/pasteur.tsx
+  - task: "Je donne (menu + lecteur), lecteur global dans app/(app)/_layout.tsx" ; implemented: true
+credentials: voir /app/memory/test_credentials.md

@@ -1,9 +1,11 @@
 """Espace Événements — événements, inscrits/badges, séances, pointage QR, enfants, dashboard, exports."""
 import io
+import re
 import unicodedata
 from datetime import datetime, timezone
 from typing import List, Optional
 
+import qrcode
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -14,9 +16,11 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import (
-    EDITORIAL_ROLES, EVENT_ADMIN_ROLES, EVENT_MANAGE_ROLES, PublicUser, current_user, display_name,
+    EDITORIAL_ROLES, EVENT_ADMIN_ROLES, EVENT_MANAGE_ROLES, PublicUser, current_user, display_name, logger,
     new_id, now_iso, public_user, require_role, sb,
 )
+from mailer import APP_URL, send_badge_email
+from messaging import send_private_message
 from push import broadcast_push
 
 router = APIRouter(prefix="/api")
@@ -177,8 +181,9 @@ def _enfants_total(session_id: str) -> int:
 
 
 def _next_badge_id(evenement_id: str) -> str:
-    count = sb().table("event_participants").select("id", count="exact").eq("evenement_id", evenement_id).execute().count or 0
-    return f"EBED-{count + 1:04d}"
+    rows = sb().table("event_participants").select("badge_id").eq("evenement_id", evenement_id).execute().data
+    nums = [int(r["badge_id"].split("-")[-1]) for r in rows if r.get("badge_id", "").split("-")[-1].isdigit()]
+    return f"EBED-{(max(nums) if nums else 0) + 1:04d}"
 
 
 def _get_event_or_404(eid: str) -> dict:
@@ -334,6 +339,160 @@ class PublicParticipantIn(ParticipantIn):
 def public_inscription(data: PublicParticipantIn):
     """Formulaire d'inscription partageable (sans authentification)."""
     return _insert_participant(data, data.referent, None)
+
+
+# --------------------------------------------------------------------------- #
+# Inscription liée à un compte (pour soi / pour quelqu'un d'autre) + badge
+# --------------------------------------------------------------------------- #
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class SelfRegistrationIn(BaseModel):
+    evenement_id: str
+    profil: str = "Membre"
+    categorie_age: Optional[str] = None
+    tel: Optional[str] = None
+    email: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: List[str] = []
+
+
+class OtherRegistrationIn(BaseModel):
+    evenement_id: str
+    nom: str
+    prenom: str
+    email: str
+    profil: str = "Externe"
+    categorie_age: Optional[str] = None
+    tel: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: List[str] = []
+
+
+class MyRegistrationUpdate(BaseModel):
+    profil: Optional[str] = None
+    categorie_age: Optional[str] = None
+    tel: Optional[str] = None
+    email: Optional[str] = None
+    eglise: Optional[str] = None
+    jours_presence: Optional[List[str]] = None
+
+
+def _badge_url(evenement_id: str, badge_id: str) -> str:
+    return f"{APP_URL}/badge?event={evenement_id}&b={badge_id}"
+
+
+def _qr_png(content: str) -> bytes:
+    img = qrcode.make(content, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _event_when(evt: dict) -> str:
+    try:
+        return datetime.fromisoformat(evt["date"].replace("Z", "+00:00")).strftime("%d/%m/%Y à %H:%M")
+    except (KeyError, ValueError):
+        return str(evt.get("date", ""))
+
+
+def _deliver_badge(participant: dict, evt: dict, *, to_user_id: Optional[str], registered_by: Optional[str]) -> dict:
+    """Badge → Messagerie interne (si lié à un compte) + email (si adresse). Jamais bloquant."""
+    url = _badge_url(evt["id"], participant["badge_id"])
+    result = {"message_sent": False, "email_sent": False, "email_error": None}
+    if to_user_id:
+        lieu = " · ".join(x for x in [evt.get("lieu"), evt.get("ville")] if x)
+        body = (f"Votre inscription à « {evt['titre']} » est confirmée.\n\n"
+                f"Badge : {participant['badge_id']}\nDate : {_event_when(evt)}\nLieu : {lieu}\n\n"
+                f"Présentez votre badge QR à l'entrée pour être pointé(e). Il a aussi été envoyé par email.")
+        try:
+            send_private_message(to_user_id, f"Votre badge — {evt['titre']}", body, action_url=url)
+            result["message_sent"] = True
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Badge non déposé en messagerie : %s", e)
+    if participant.get("email"):
+        ok, err = send_badge_email(participant, evt, _qr_png(participant["badge_id"]), url, registered_by=registered_by)
+        result["email_sent"], result["email_error"] = ok, err
+    return result
+
+
+def _my_participant(evenement_id: str, user_id: str) -> Optional[dict]:
+    res = sb().table("event_participants").select("*").eq("evenement_id", evenement_id).eq("user_id", user_id).limit(1).execute()
+    return _participant(res.data[0]) if res.data else None
+
+
+@router.get("/event/participants/me")
+def get_my_registration(evenement_id: str, user=Depends(current_user)):
+    """Inscription de l'utilisateur connecté à cet événement (null si non inscrit)."""
+    return _my_participant(evenement_id, user["id"])
+
+
+@router.post("/event/participants/me", status_code=201)
+def register_me(data: SelfRegistrationIn, user=Depends(current_user)):
+    """« Je m'inscris » : crée l'inscription liée au compte, badge envoyé dans la Messagerie + par email."""
+    if data.profil not in PROFILS:
+        raise HTTPException(400, "Profil invalide")
+    evt = _get_event_or_404(data.evenement_id)
+    if _my_participant(evt["id"], user["id"]):
+        raise HTTPException(409, "Vous êtes déjà inscrit(e) à cet événement")
+    email = (data.email or user.get("email") or "").strip().lower() or None
+    row = {
+        "id": new_id(), "evenement_id": evt["id"], "badge_id": _next_badge_id(evt["id"]),
+        "nom": (user.get("nom") or "").strip().upper(), "prenom": (user.get("prenom") or "").strip(),
+        "profil": data.profil, "categorie_age": data.categorie_age, "tel": data.tel, "email": email,
+        "eglise": data.eglise, "jours_presence": data.jours_presence, "referent": None, "notes": None,
+        "sms_status": "none", "wa_status": "none", "user_id": user["id"], "registered_by": user["id"],
+        "created_at": now_iso(),
+    }
+    p = _participant(sb().table("event_participants").insert(row).execute().data[0])
+    return {**p, "delivery": _deliver_badge(p, evt, to_user_id=user["id"], registered_by=None)}
+
+
+@router.patch("/event/participants/me/{pid}")
+def update_my_registration(pid: str, data: MyRegistrationUpdate, user=Depends(current_user)):
+    res = sb().table("event_participants").select("*").eq("id", pid).eq("user_id", user["id"]).limit(1).execute()
+    if not res.data:
+        raise HTTPException(404, "Inscription introuvable")
+    updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+    if "profil" in updates and updates["profil"] not in PROFILS:
+        raise HTTPException(400, "Profil invalide")
+    if "email" in updates:
+        updates["email"] = updates["email"].strip().lower() or None
+    if not updates:
+        return _participant(res.data[0])
+    return _participant(sb().table("event_participants").update(updates).eq("id", pid).execute().data[0])
+
+
+@router.delete("/event/participants/me/{pid}", status_code=204)
+def cancel_my_registration(pid: str, user=Depends(current_user)):
+    """« Annuler mon inscription » — le bouton « Je m'inscris » réapparaît ensuite."""
+    res = sb().table("event_participants").delete().eq("id", pid).eq("user_id", user["id"]).execute()
+    if not res.data:
+        raise HTTPException(404, "Inscription introuvable")
+    return None
+
+
+@router.post("/event/participants/other", status_code=201)
+def register_other(data: OtherRegistrationIn, user=Depends(current_user)):
+    """« Inscrire une autre personne » (tous les rôles) : le bénéficiaire reçoit son badge par email."""
+    if data.profil not in PROFILS:
+        raise HTTPException(400, "Profil invalide")
+    email = data.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Adresse email du bénéficiaire invalide")
+    if not data.nom.strip() or not data.prenom.strip():
+        raise HTTPException(400, "Nom et prénom requis")
+    evt = _get_event_or_404(data.evenement_id)
+    row = {
+        "id": new_id(), "evenement_id": evt["id"], "badge_id": _next_badge_id(evt["id"]),
+        "nom": data.nom.strip().upper(), "prenom": data.prenom.strip(), "profil": data.profil,
+        "categorie_age": data.categorie_age, "tel": data.tel, "email": email, "eglise": data.eglise,
+        "jours_presence": data.jours_presence, "referent": display_name(user), "notes": None,
+        "sms_status": "none", "wa_status": "none", "user_id": None, "registered_by": user["id"],
+        "created_at": now_iso(),
+    }
+    p = _participant(sb().table("event_participants").insert(row).execute().data[0])
+    return {**p, "delivery": _deliver_badge(p, evt, to_user_id=None, registered_by=display_name(user))}
 
 
 @router.get("/event/participants/by-badge/{badge_id}")

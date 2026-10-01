@@ -4,21 +4,22 @@
  * sleep timer, speed control, favorites toggle, and server-side progress sync.
  */
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import {
   createAudioPlayer,
   setAudioModeAsync,
   type AudioPlayer,
 } from "expo-audio";
-import { MediaItem, api, mediaFileUrl } from "@/src/api";
+import { MediaItem, api, mediaFileUrl, mediaCoverUrl } from "@/src/api";
 import { useAuth } from "@/src/auth";
 
-// Enable playback while the app is in the background / device is silenced.
-// Full lock-screen controls require a native build (documented for the user).
+// Lecture en arrière-plan (app réduite / écran verrouillé) — nécessite un build natif.
+// Android : les contrôles d'écran verrouillé (setActiveForLockScreen) sont obligatoires
+// pour une lecture prolongée ; interruptionMode doit alors être "doNotMix".
 setAudioModeAsync({
   playsInSilentMode: true,
   shouldPlayInBackground: true,
-  interruptionMode: "duckOthers",
+  interruptionMode: "doNotMix",
 }).catch(() => {});
 
 export type SleepTimerMode = null | "endOfTrack" | number; // number = seconds
@@ -132,6 +133,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // dispose previous
     if (playerRef.current) {
       try { playerRef.current.pause(); } catch {}
+      try { playerRef.current.clearLockScreenControls?.(); } catch {}
       try { playerRef.current.removeAllListeners?.("playbackStatusUpdate"); } catch {}
       try { playerRef.current.remove(); } catch {}
       playerRef.current = null;
@@ -186,6 +188,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       });
       p.play();
       setIsPlaying(true);
+      if (Platform.OS !== "web") {
+        try {
+          p.setActiveForLockScreen(
+            true,
+            { title: item.title, artist: item.author, albumTitle: "UDAMG APP", artworkUrl: mediaCoverUrl(item) || undefined },
+            { showSeekForward: true, showSeekBackward: true },
+          );
+        } catch {}
+      }
     } catch (e) {
       console.warn("audio player init failed", e);
       setIsPlaying(false);

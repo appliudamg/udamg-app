@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, ImageBackground, Platform } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { useMutation } from "@tanstack/react-query";
-import { ChevronLeft, UserPlus, Link2, Bell, ClipboardCheck, Trash2, CalendarDays, Clock, MapPin, Users } from "lucide-react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { BadgeCheck, ChevronLeft, UserPlus, UserX, QrCode, Link2, Bell, ClipboardCheck, Trash2, CalendarDays, Clock, MapPin, Users } from "lucide-react-native";
 import { API_BASE } from "@/src/api";
+import { EventParticipant } from "@/src/event-api";
 import { useToast } from "@/src/toast";
 import { confirmAction } from "@/src/confirm";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,6 +23,7 @@ export default function EventDetail() {
   const { token, user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const toast = useToast();
+  const qc = useQueryClient();
 
   const inscriptionUrl = () => {
     const base = Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin : API_BASE;
@@ -52,6 +54,22 @@ export default function EventDetail() {
     queryKey: ["invitations", id],
     queryFn: () => api<Invitation[]>(`/evenements/${id}/invitations`, {}, token),
     enabled: !!token && !!id,
+  });
+
+  // Mon inscription (null si pas inscrit) → pilote les boutons Je m'inscris / Voir mon badge / Annuler
+  const myReg = useQuery({
+    queryKey: ["my-registration", id],
+    queryFn: () => api<EventParticipant | null>(`/event/participants/me?evenement_id=${id}`, {}, token),
+    enabled: !!token && !!id,
+  });
+  const cancelReg = useMutation({
+    mutationFn: () => api(`/event/participants/me/${myReg.data!.id}`, { method: "DELETE" }, token),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-registration", id] });
+      qc.invalidateQueries({ queryKey: ["event-participants", id] });
+      toast.show("Inscription annulée", "info");
+    },
+    onError: (e: any) => toast.show(e?.message || "Annulation impossible", "error"),
   });
 
   if (isLoading || !evt) {
@@ -113,12 +131,40 @@ export default function EventDetail() {
           )}
 
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Inscription</Text>
+            <View style={styles.actions}>
+              {myReg.data ? (
+                <>
+                  <View style={styles.regBanner} testID="event-registered-banner">
+                    <BadgeCheck size={20} color={colors.success} />
+                    <Text style={styles.regBannerTxt}>Vous êtes inscrit(e) · badge <Text style={{ fontWeight: "800" }}>{myReg.data.badge_id}</Text></Text>
+                  </View>
+                  <Pressable testID="event-my-badge" onPress={() => router.push(`/(app)/evenements/${id}/inscrire?mode=edit&titre=${encodeURIComponent(evt.titre)}`)} style={[styles.actBtn, styles.actPrimary]}>
+                    <QrCode size={18} color={colors.onBrandPrimary} />
+                    <Text style={[styles.actTxt, { color: colors.onBrandPrimary }]}>Voir mon badge / Modifier</Text>
+                  </Pressable>
+                  <Pressable testID="event-cancel-registration" disabled={cancelReg.isPending} onPress={() => confirmAction("Annuler mon inscription ?", "Votre badge sera désactivé. Vous pourrez vous réinscrire ensuite.", () => cancelReg.mutate(), "Annuler l'inscription")} style={[styles.actBtn, { borderColor: colors.error }]}>
+                    <UserX size={18} color={colors.error} />
+                    <Text style={[styles.actTxt, { color: colors.error }]}>{cancelReg.isPending ? "Annulation…" : "Annuler mon inscription"}</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable testID="event-register" disabled={myReg.isLoading} onPress={() => router.push(`/(app)/evenements/${id}/inscrire?mode=self&titre=${encodeURIComponent(evt.titre)}`)} style={[styles.actBtn, styles.actPrimary]}>
+                  <UserPlus size={18} color={colors.onBrandPrimary} />
+                  <Text style={[styles.actTxt, { color: colors.onBrandPrimary }]}>Je m&apos;inscris</Text>
+                </Pressable>
+              )}
+              <Pressable testID="event-register-other" onPress={() => router.push(`/(app)/evenements/${id}/inscrire?mode=other&titre=${encodeURIComponent(evt.titre)}`)} style={styles.actBtn}>
+                <Users size={18} color={colors.brandPrimary} />
+                <Text style={styles.actTxt}>Inscrire une autre personne</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {(canShareEventLink(user?.role) || canSendRappel(user?.role) || canManageEvents(user?.role) || canAdminEvents(user?.role)) && (
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Actions</Text>
             <View style={styles.actions}>
-              <Pressable testID="event-register" onPress={() => router.push(`/inscription?event=${id}&titre=${encodeURIComponent(evt.titre)}`)} style={[styles.actBtn, styles.actPrimary]}>
-                <UserPlus size={18} color={colors.onBrandPrimary} />
-                <Text style={[styles.actTxt, { color: colors.onBrandPrimary }]}>Je m&apos;inscris</Text>
-              </Pressable>
               {canShareEventLink(user?.role) && (
                 <Pressable testID="event-copy-link" onPress={copyLink} style={styles.actBtn}>
                   <Link2 size={18} color={colors.brandPrimary} />
@@ -145,6 +191,7 @@ export default function EventDetail() {
               )}
             </View>
           </View>
+          )}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Coordination</Text>
@@ -186,6 +233,8 @@ const styles = StyleSheet.create({
   actBtn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 50, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   actPrimary: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   actTxt: { color: colors.brandPrimary, fontWeight: "700", fontSize: 15 },
+  regBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: "#D1FAE5", borderWidth: 1, borderColor: colors.success },
+  regBannerTxt: { color: colors.onSurface, fontSize: 13, flex: 1 },
   root: { flex: 1, backgroundColor: colors.surface },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   hero: { height: 320, justifyContent: "space-between" },

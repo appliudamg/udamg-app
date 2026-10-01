@@ -13,6 +13,7 @@ import { EventDashboard, EventSession, PointageRecord } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
 import { colors, spacing, radius } from "@/src/theme";
 import { canAdminEvents } from "@/src/roles";
+import { PinLock } from "@/src/event/PinLock";
 import { Trash2 } from "lucide-react-native";
 
 export default function Pasteur() {
@@ -24,6 +25,7 @@ export default function Pasteur() {
   const { id, titre } = useLocalSearchParams<{ id: string; titre?: string; openStart?: string }>();
   const openStart = (useLocalSearchParams() as any).openStart;
 
+  const [unlocked, setUnlocked] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const [sessionName, setSessionName] = useState("");
   const [busyPdf, setBusyPdf] = useState(false);
@@ -31,26 +33,26 @@ export default function Pasteur() {
   const [purgeText, setPurgeText] = useState("");
 
   useEffect(() => {
-    if (openStart === "1") setStartOpen(true);
-  }, [openStart]);
+    if (openStart === "1" && unlocked) setStartOpen(true);
+  }, [openStart, unlocked]);
 
   const { data: dash } = useQuery({
     queryKey: ["event-dashboard", id],
     queryFn: () => api<EventDashboard>(`/event/dashboard?evenement_id=${id}`, {}, token),
-    enabled: !!token && !!id,
+    enabled: !!token && !!id && unlocked,
     refetchInterval: 5000,
   });
 
   const { data: sessions } = useQuery({
     queryKey: ["event-sessions", id],
     queryFn: () => api<EventSession[]>(`/event/sessions?evenement_id=${id}`, {}, token),
-    enabled: !!token && !!id,
+    enabled: !!token && !!id && unlocked,
   });
 
   const { data: recent } = useQuery({
     queryKey: ["event-pointages", id],
     queryFn: () => api<PointageRecord[]>(`/event/pointages?evenement_id=${id}&limit=15`, {}, token),
-    enabled: !!token && !!id,
+    enabled: !!token && !!id && unlocked,
     refetchInterval: 4000,
   });
 
@@ -102,6 +104,11 @@ export default function Pasteur() {
   };
 
   const isPasteur = canAdminEvents(user?.role);
+
+  // Code PIN obligatoire à chaque ouverture — évite les lancements accidentels de séances.
+  if (!unlocked) {
+    return <PinLock title={titre} onUnlock={() => setUnlocked(true)} onCancel={() => (router.canGoBack() ? router.back() : router.replace(`/(app)/event/${id}/hub`))} />;
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -163,6 +170,9 @@ export default function Pasteur() {
             </Pressable>
           </View>
 
+          {(sessions ?? []).length === 0 && (
+            <Text style={styles.empty} testID="sessions-empty">Aucune séance. Les séances sont créées manuellement via « Lancer une séance ».</Text>
+          )}
           {(sessions ?? []).map(s => (
             <View key={s.id} style={[styles.sessionRow, s.active && styles.sessionActive]}>
               <View style={{ flex: 1 }}>

@@ -6,3 +6,6 @@ pwdlib[argon2]>=0.2
 python-dotenv>=1.0
 reportlab>=4.2
 qtfaststart>=1.8
+qrcode>=8.0
+pillow>=10
+httpx>=0.27

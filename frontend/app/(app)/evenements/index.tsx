@@ -194,7 +194,7 @@ export default function EvenementsList() {
                 <View style={styles.cardActions}>
                   <Pressable
                     testID={`evt-register-${item.id}`}
-                    onPress={() => router.push(`/inscription?event=${item.id}&titre=${encodeURIComponent(item.titre)}`)}
+                    onPress={() => router.push(`/(app)/evenements/${item.id}`)}
                     style={[styles.cardBtn, { backgroundColor: colors.brandPrimary }]}
                   >
                     <Text style={[styles.cardBtnTxt, { color: colors.onBrandPrimary }]}>Je m&apos;inscris</Text>

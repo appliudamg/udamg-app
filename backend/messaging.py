@@ -23,6 +23,8 @@ class Message(BaseModel):
     title: str
     body: str
     created_at: str
+    recipient_id: Optional[str] = None  # None = diffusion à tous ; sinon message privé
+    action_url: Optional[str] = None
     read: bool = False
     read_at: Optional[str] = None
     read_count: int = 0
@@ -46,14 +48,38 @@ def _to_message(d: dict, my_read: Optional[dict], read_count: int, recipients: i
     return Message(
         id=d["id"], sender_id=d.get("sender_id"), sender_name=d.get("sender_name", ""),
         title=d["title"], body=d["body"], created_at=d["created_at"],
+        recipient_id=d.get("recipient_id"), action_url=d.get("action_url"),
         read=my_read is not None, read_at=my_read["read_at"] if my_read else None,
         read_count=read_count, recipients_count=recipients,
     )
 
 
+def _visible(query, user_id: str):
+    """Messages diffusés à tous + messages privés destinés à l'utilisateur."""
+    return query.or_(f"recipient_id.is.null,recipient_id.eq.{user_id}")
+
+
+def _can_see(m: dict, user: dict) -> bool:
+    rid = m.get("recipient_id")
+    return rid is None or rid == user["id"] or user["role"] in MESSAGE_SEND_ROLES
+
+
+def send_private_message(user_id: str, title: str, body: str, sender: Optional[dict] = None,
+                         action_url: Optional[str] = None) -> dict:
+    """Dépose un message privé dans la Messagerie d'un seul utilisateur (+ push)."""
+    row = {"id": new_id(), "sender_id": sender["id"] if sender else None,
+           "sender_name": display_name(sender) if sender else "UDAMG APP",
+           "title": title.strip()[:140], "body": body.strip(), "recipient_id": user_id,
+           "action_url": action_url, "created_at": now_iso()}
+    sb().table("messages").insert(row).execute()
+    broadcast_push([user_id], title=row["title"], message=row["body"],
+                   action_url=f"/(app)/messages/{row['id']}", key=f"pm-{row['id']}")
+    return row
+
+
 @router.get("/messages", response_model=List[Message])
 def list_messages(user=Depends(current_user)):
-    msgs = sb().table("messages").select("*").order("created_at", desc=True).limit(200).execute().data
+    msgs = _visible(sb().table("messages").select("*"), user["id"]).order("created_at", desc=True).limit(200).execute().data
     if not msgs:
         return []
     ids = [m["id"] for m in msgs]
@@ -63,12 +89,12 @@ def list_messages(user=Depends(current_user)):
     for r in reads:
         counts[r["message_id"]] = counts.get(r["message_id"], 0) + 1
     recipients = len(_recipients()) if user["role"] in MESSAGE_SEND_ROLES else 0
-    return [_to_message(m, mine.get(m["id"]), counts.get(m["id"], 0), recipients) for m in msgs]
+    return [_to_message(m, mine.get(m["id"]), counts.get(m["id"], 0), 1 if m.get("recipient_id") else recipients) for m in msgs]
 
 
 @router.get("/messages/unread-count")
 def unread_count(user=Depends(current_user)):
-    total = sb().table("messages").select("id", count="exact").execute().count or 0
+    total = _visible(sb().table("messages").select("id", count="exact"), user["id"]).execute().count or 0
     read = sb().table("message_reads").select("message_id", count="exact").eq("user_id", user["id"]).execute().count or 0
     return {"unread": max(0, total - read)}
 
@@ -100,15 +126,19 @@ def _get_message(mid: str) -> dict:
 @router.get("/messages/{mid}", response_model=Message)
 def get_message(mid: str, user=Depends(current_user)):
     m = _get_message(mid)
+    if not _can_see(m, user):
+        raise HTTPException(404, "Message introuvable")
     reads = sb().table("message_reads").select("user_id,read_at").eq("message_id", mid).execute().data
     mine = next((r for r in reads if r["user_id"] == user["id"]), None)
-    recipients = len(_recipients()) if user["role"] in MESSAGE_SEND_ROLES else 0
+    recipients = 1 if m.get("recipient_id") else (len(_recipients()) if user["role"] in MESSAGE_SEND_ROLES else 0)
     return _to_message(m, mine, len(reads), recipients)
 
 
 @router.post("/messages/{mid}/read", response_model=Message)
 def mark_read(mid: str, user=Depends(current_user)):
     m = _get_message(mid)
+    if not _can_see(m, user):
+        raise HTTPException(404, "Message introuvable")
     sb().table("message_reads").upsert(
         {"message_id": mid, "user_id": user["id"], "read_at": now_iso()},
         on_conflict="message_id,user_id", ignore_duplicates=True,
@@ -121,11 +151,14 @@ def mark_read(mid: str, user=Depends(current_user)):
 @router.get("/messages/{mid}/reads")
 def message_reads(mid: str, _=Depends(send_dep)):
     """Suivi de lecture (temps réel via polling côté client) : qui a lu / pas encore lu."""
-    _get_message(mid)
+    m = _get_message(mid)
     reads = {r["user_id"]: r["read_at"] for r in
              sb().table("message_reads").select("user_id,read_at").eq("message_id", mid).execute().data}
     seen, unseen = [], []
-    for u in _recipients():
+    targets = _recipients()
+    if m.get("recipient_id"):
+        targets = [u for u in targets if u["id"] == m["recipient_id"]]
+    for u in targets:
         entry = ReadEntry(user_id=u["id"], nom=u.get("nom", ""), prenom=u.get("prenom", ""),
                           email=u["email"], role=u["role"], read_at=reads.get(u["id"]))
         (seen if u["id"] in reads else unseen).append(entry)

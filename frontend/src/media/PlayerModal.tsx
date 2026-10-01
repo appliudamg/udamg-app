@@ -10,7 +10,8 @@ import { mediaCoverUrl, mediaFileUrl, fmtDuration } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { ChevronDown, Heart, Moon, Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
+import { ChevronDown, HandHeart, Heart, Moon, Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
+import { openDonation } from "@/src/links";
 
 const RATES = [0.75, 1, 1.25, 1.5, 2];
 
@@ -142,6 +143,10 @@ export function PlayerModal() {
                 {p.sleepRemainingSec ? `${Math.ceil(p.sleepRemainingSec / 60)} min` : "Sommeil"}
               </Text>
             </Pressable>
+            <Pressable testID="player-don" onPress={openDonation} style={[styles.extraBtn, styles.donBtn]}>
+              <HandHeart size={16} color="#000" />
+              <Text style={[styles.extraTxt, { color: "#000" }]}>Je donne</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -169,6 +174,7 @@ function VideoScreen({
 }) {
   const insets = useSafeAreaInsets();
   const player = useVideoPlayer(url, (p) => {
+    p.staysActiveInBackground = true;
     p.play();
   });
 
@@ -176,7 +182,7 @@ function VideoScreen({
     <View style={videoStyles.root}>
       <View style={[videoStyles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable testID="video-close" onPress={onClose} hitSlop={12} style={videoStyles.iconBtn}>
-          <Text style={videoStyles.icon}>⌄</Text>
+          <ChevronDown size={30} color="#FFF" />
         </Pressable>
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={videoStyles.eyebrow}>VIDÉO</Text>
@@ -198,6 +204,10 @@ function VideoScreen({
         <Text style={videoStyles.metaTitle}>{item.title}</Text>
         <Text style={videoStyles.metaAuthor}>{item.author}</Text>
         {!!item.description && <Text style={videoStyles.metaDesc}>{item.description}</Text>}
+        <Pressable testID="video-don" onPress={openDonation} style={[styles.extraBtn, styles.donBtn, { alignSelf: "flex-start", marginTop: 12 }]}>
+          <HandHeart size={16} color="#000" />
+          <Text style={[styles.extraTxt, { color: "#000" }]}>Je donne</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -352,6 +362,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: mediaTheme.border, backgroundColor: mediaTheme.card,
   },
   extraTxt: { color: mediaTheme.text, fontWeight: "700", fontSize: 12 },
+  donBtn: { backgroundColor: mediaTheme.gold, borderColor: mediaTheme.gold },
   noAudio: { marginTop: 12, padding: 10, backgroundColor: mediaTheme.rubySoft, borderRadius: 10 },
   noAudioTxt: { color: "#FFC5CE", fontSize: 12, textAlign: "center", lineHeight: 17 },
 });

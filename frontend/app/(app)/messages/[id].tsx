@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { QrCode } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
@@ -51,6 +52,13 @@ export default function MessageDetail() {
 
   const confirmDelete = () => confirmAction("Supprimer ce message ?", "Il disparaîtra pour tous les destinataires.", () => del.mutate());
 
+  // Lien d'action (badge) : ouvre l'écran /badge dans l'app, sinon le navigateur
+  const openAction = (url: string) => {
+    const i = url.indexOf("/badge?");
+    if (i >= 0) router.push(url.slice(i) as any);
+    else Linking.openURL(url).catch(() => {});
+  };
+
   const m = msg.data;
   const entries: ReadEntry[] = tab === "read" ? (reads.data?.read ?? []) : (reads.data?.unread ?? []);
   const pct = reads.data && reads.data.recipients_count > 0
@@ -78,12 +86,19 @@ export default function MessageDetail() {
             <Text style={styles.title} testID="message-title">{m.title}</Text>
             <Text style={styles.meta}>De {m.sender_name} · {fmtDateTime(m.created_at)}</Text>
             <Text style={styles.body} testID="message-body" selectable>{m.body}</Text>
-            {!sender && (
+            {!!m.action_url && (
+              <Pressable testID="message-action" onPress={() => openAction(m.action_url!)} style={styles.actionBtn}>
+                <QrCode size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.actionTxt}>Voir mon badge</Text>
+              </Pressable>
+            )}
+            {!sender && !m.recipient_id && (
               <Text style={styles.readNote}>Vu {m.read_at ? `le ${fmtDateTime(m.read_at)}` : "à l'instant"} · canal en lecture seule</Text>
             )}
+            {!!m.recipient_id && <Text style={styles.readNote}>Message personnel · visible uniquement par vous</Text>}
           </View>
 
-          {sender && (
+          {sender && !m.recipient_id && (
             <View style={styles.tracking}>
               <View style={styles.trackHead}>
                 <Text style={styles.trackTitle}>Suivi de lecture</Text>
@@ -136,6 +151,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
   meta: { fontSize: 12, color: colors.muted },
   body: { fontSize: 16, lineHeight: 24, color: colors.onSurface, marginTop: spacing.sm },
+  actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.brandPrimary, borderRadius: radius.md, minHeight: 48, marginTop: spacing.lg },
+  actionTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 15 },
   readNote: { fontSize: 12, color: colors.success, marginTop: spacing.md, fontWeight: "600" },
   tracking: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
   trackHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

@@ -21,3 +21,5 @@ export const canAdminEvents = (r?: Role | null) => has(EVENT_ADMIN_ROLES, r);
 export const canShareEventLink = (r?: Role | null) => !!r && r !== "membre";
 export const canSendRappel = (r?: Role | null) => has(EDITORIAL_ROLES, r);
 export const canEditPensees = (r?: Role | null) => has(EDITORIAL_ROLES, r);
+// « Mes droits d'accès » (Profil) : visible uniquement pour Admin et Équipe technique
+export const canViewAccessRights = (r?: Role | null) => has(EDITORIAL_ROLES, r);

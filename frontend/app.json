@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.emergent.churchconnect.u28idv",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Publier des photos et vidéos en story",
-        "NSCameraUsageDescription": "Scanner les badges QR des participants"
+        "NSCameraUsageDescription": "Scanner les badges QR des participants",
+        "UIBackgroundModes": ["audio", "remote-notification"]
       }
     },
     "android": {
@@ -65,11 +66,17 @@
           "cameraPermission": "Autoriser UDAMG à utiliser la caméra pour scanner les badges QR"
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "recordAudioAndroid": false
+        }
+      ],
       [
         "expo-video",
         {
-          "supportsBackgroundPlayback": false,
+          "supportsBackgroundPlayback": true,
           "supportsPictureInPicture": true
         }
       ],
@@ -77,7 +84,8 @@
         "expo-notifications",
         {
           "icon": "./assets/images/adaptive-icon.png",
-          "color": "#0047AB"
+          "color": "#0047AB",
+          "enableBackgroundRemoteNotifications": true
         }
       ]
     ],

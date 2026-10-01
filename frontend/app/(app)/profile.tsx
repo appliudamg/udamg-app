@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, roleLabel } from "@/src/api";
-import { canReadRestrictedMedia, canSendMessages, canWriteMedia, canManageUsers, canManageEvents } from "@/src/roles";
+import { canReadRestrictedMedia, canSendMessages, canWriteMedia, canManageUsers, canManageEvents, canViewAccessRights } from "@/src/roles";
 import { useToast } from "@/src/toast";
 import { colors, spacing, radius } from "@/src/theme";
 import { Check, Minus } from "lucide-react-native";
@@ -53,15 +53,19 @@ export default function Profile() {
           <View style={styles.pill}><Text style={styles.pillTxt} testID="profile-role">{user ? roleLabel(user.role).toUpperCase() : ""}</Text></View>
         </View>
 
-        <Text style={styles.section}>Mes droits d&apos;accès</Text>
-        <View style={styles.box}>
-          {rights.map((r) => (
-            <View key={r.label} style={styles.right}>
-              {r.ok ? <Check size={18} color={colors.success} /> : <Minus size={18} color={colors.muted} />}
-              <Text style={[styles.rightTxt, !r.ok && { color: colors.muted }]}>{r.label}</Text>
+        {canViewAccessRights(user?.role) && (
+          <>
+            <Text style={styles.section}>Mes droits d&apos;accès</Text>
+            <View style={styles.box} testID="profile-rights">
+              {rights.map((r) => (
+                <View key={r.label} style={styles.right}>
+                  {r.ok ? <Check size={18} color={colors.success} /> : <Minus size={18} color={colors.muted} />}
+                  <Text style={[styles.rightTxt, !r.ok && { color: colors.muted }]}>{r.label}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        )}
 
         <Text style={styles.section}>Changer mon mot de passe</Text>
         <View style={styles.box}>
