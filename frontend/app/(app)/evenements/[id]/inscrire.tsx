@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, TextInput, ScrollView, KeyboardAvoidingView,
+  View, Text, Pressable, TextInput, ScrollView, KeyboardAvoidingView,
   Platform, ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -11,7 +11,7 @@ import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
 import { EVENT_PROFILS, CATEGORIES_AGE, EventParticipant, EventProfil, CategorieAge, profilColor } from "@/src/event-api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 
 type Mode = "self" | "other" | "edit";
 type Delivery = { message_sent: boolean; email_sent: boolean; email_error?: string | null };
@@ -26,6 +26,8 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  *  - edit  : « Voir mon badge / Modifier » (modification de mon inscription)
  */
 export default function Inscrire() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { token } = useAuth();
   const { id, mode: rawMode, titre } = useLocalSearchParams<{ id: string; mode?: string; titre?: string }>();
   const mode: Mode = rawMode === "other" ? "other" : rawMode === "edit" ? "edit" : "self";
@@ -44,6 +46,8 @@ export default function Inscrire() {
 }
 
 function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mode; titre?: string; existing: EventParticipant | null }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
@@ -210,7 +214,7 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
@@ -240,4 +244,4 @@ const styles = StyleSheet.create({
   deliveryBox: { alignSelf: "stretch", backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, gap: spacing.sm, marginTop: spacing.lg, borderWidth: 1, borderColor: colors.border },
   deliveryRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   deliveryTxt: { color: colors.onSurface, fontSize: 13, flex: 1 },
-});
+}));

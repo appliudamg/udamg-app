@@ -7,13 +7,16 @@ import { useAuth } from "@/src/auth";
 import { api, roleLabel } from "@/src/api";
 import { canManageUsers } from "@/src/roles";
 import { openDonation } from "@/src/links";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { ExternalLink, HandHeart, Megaphone, Users } from "lucide-react-native";
 
 const EVENTS_IMG = "https://images.unsplash.com/photo-1570786032462-2efc3ca8fccd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjaHVyY2glMjB3b3JzaGlwJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
+const DON_IMG = "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?crop=entropy&cs=srgb&fm=jpg&w=1200&q=80";
 const MEDIA_IMG = "https://images.unsplash.com/photo-1478147427282-58a87a120781?crop=entropy&cs=srgb&fm=jpg&w=1200&q=80";
 
 export default function MenuPrincipal() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, token } = useAuth();
@@ -31,7 +34,9 @@ export default function MenuPrincipal() {
       <View style={styles.header}>
         <View>
           <Text style={styles.hello}>Bonjour {user?.prenom}</Text>
-          <Image source={require("../../assets/images/logo_udamg.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="UDAMG" testID="menu-logo" />
+          <View style={styles.logoWrap}>
+            <Image source={require("../../assets/images/logo_udamg.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="UDAMG" testID="menu-logo" />
+          </View>
           {!!user && <Text style={styles.role}>{roleLabel(user.role)}</Text>}
         </View>
         <Pressable
@@ -121,28 +126,37 @@ export default function MenuPrincipal() {
         <Pressable
           testID="menu-don-card"
           onPress={openDonation}
-          style={({ pressed }) => [styles.teamCard, styles.donCard, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [styles.card, styles.donCard, pressed && { opacity: 0.9 }]}
         >
-          <View style={[styles.iconWrap, styles.donIcon]}><HandHeart size={24} color={colors.onBrandPrimary} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.teamTitle}>Je donne</Text>
-            <Text style={styles.teamSub}>Offrandes & dons · ouvre la page sécurisée</Text>
-          </View>
-          <ExternalLink size={18} color={colors.muted} />
+          <ImageBackground source={{ uri: DON_IMG }} style={styles.cardBg} imageStyle={styles.cardImage}>
+            <LinearGradient colors={["rgba(180,83,9,0.35)", "rgba(15,23,42,0.88)"]} style={StyleSheet.absoluteFill} />
+            <View style={styles.cardOverlay}>
+              <View style={styles.donRow}>
+                <HandHeart size={22} color="#FDE68A" />
+                <Text style={styles.cardEyebrow}>OFFRANDES & DONS</Text>
+              </View>
+              <Text style={styles.cardTitle} adjustsFontSizeToFit numberOfLines={1}>Je donne</Text>
+              <View style={styles.donRow}>
+                <Text style={styles.cardSubtitle}>Soutenir l&apos;œuvre · page sécurisée</Text>
+                <ExternalLink size={14} color="#E2E8F0" />
+              </View>
+            </View>
+          </ImageBackground>
         </Pressable>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: {
     paddingHorizontal: spacing.xl, paddingVertical: spacing.lg,
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
   },
   hello: { color: colors.muted, fontSize: 13 },
-  logo: { width: 150, height: 66, marginTop: 4, marginLeft: -6 },
+  logoWrap: { alignSelf: "flex-start", backgroundColor: "#FFFFFF", borderRadius: radius.md, paddingHorizontal: 6, marginTop: 4, marginLeft: -6 },
+  logo: { width: 150, height: 66 },
   role: { color: colors.brandPrimary, fontSize: 12, fontWeight: "700", marginTop: 2 },
   avatar: {
     width: 44, height: 44, borderRadius: radius.pill,
@@ -170,8 +184,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, minHeight: 64,
   },
   iconWrap: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
-  donCard: { borderColor: colors.brandSecondary, marginBottom: 72 },
-  donIcon: { backgroundColor: colors.brandPrimary },
+  donCard: { marginBottom: 72 },
+  donRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   teamTitle: { color: colors.onSurface, fontWeight: "800", fontSize: 15 },
   teamSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
   teamChev: { color: colors.muted, fontSize: 22 },
@@ -180,4 +194,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error, alignItems: "center", justifyContent: "center",
   },
   badgeTxt: { color: colors.onError, fontWeight: "800", fontSize: 12 },
-});
+}));

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import { ChevronLeft } from "lucide-react-native";
 import {
-  View, Text, StyleSheet, Pressable, SectionList, TextInput, ActivityIndicator, Modal, ScrollView,
+  View, Text, Pressable, SectionList, TextInput, ActivityIndicator, Modal, ScrollView,
   KeyboardAvoidingView, Platform, RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -10,18 +11,19 @@ import { useAuth } from "@/src/auth";
 import { api, ROLES, Role, User, roleLabel, normalize } from "@/src/api";
 import { useToast } from "@/src/toast";
 import { confirmAction } from "@/src/confirm";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { PasswordInput } from "@/src/PasswordInput";
 
 type FormState = { email: string; nom: string; prenom: string; role: Role; password: string };
 const EMPTY: FormState = { email: "", nom: "", prenom: "", role: "membre", password: "" };
 
 // Ordre d'affichage des blocs par rôle
-const BLOCK_ORDER: Role[] = ["membre", "disciple", "ouvrier", "leader", "berger", "missionnaire", "pasteur", "admin", "equipe_technique"];
+const BLOCK_ORDER: Role[] = ["membre", "disciple", "ouvrier", "leader", "berger", "missionnaire", "pasteur", "comev", "admin", "equipe_technique"];
 
 const ROLE_HELP: Record<Role, string> = {
   admin: "Accès total · gère les utilisateurs · envoie des messages",
   equipe_technique: "Ajoute/modifie les médias · envoie des messages",
+  comev: "Comité événements · émargement & gestion des programmes (Espace Pasteur protégé par PIN)",
   pasteur: "Tous les médias (y compris Réunions Pasteur / Conseil élargi)",
   missionnaire: "Tous les médias (y compris Réunions)",
   berger: "Tous les médias (y compris Réunions)",
@@ -32,6 +34,8 @@ const ROLE_HELP: Record<Role, string> = {
 };
 
 export default function UsersAdmin() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -101,7 +105,7 @@ export default function UsersAdmin() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable testID="users-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}><Text style={styles.backTxt}>‹</Text></Pressable>
+        <Pressable testID="users-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}><ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} /></Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Équipe & Utilisateurs</Text>
           <Text style={styles.sub}>{users.data?.length ?? 0} compte(s)</Text>
@@ -193,10 +197,10 @@ export default function UsersAdmin() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, lineHeight: 30 },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
   sub: { fontSize: 12, color: colors.muted },
@@ -236,4 +240,4 @@ const styles = StyleSheet.create({
   help: { color: colors.muted, fontSize: 12, marginTop: spacing.sm, fontStyle: "italic" },
   cta: { backgroundColor: colors.brandPrimary, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center", marginTop: spacing.xl },
   ctaTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 16 },
-});
+}));

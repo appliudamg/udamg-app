@@ -20,7 +20,7 @@ from core import (
     new_id, now_iso, public_user, require_role, sb,
 )
 from mailer import APP_URL, send_badge_email
-from messaging import send_private_message
+from messaging import broadcast_system_message, send_private_message
 from push import broadcast_push
 
 router = APIRouter(prefix="/api")
@@ -232,7 +232,12 @@ def create_evenement(data: EvenementCreate, user=Depends(manage_dep)):
     row = {"id": new_id(), **data.model_dump(), "date": data.date.isoformat(),
            "created_by": user["id"], "created_at": now_iso()}
     res = sb().table("evenements").insert(row).execute()
-    return _evt(res.data[0])
+    evt = res.data[0]
+    lieu = " · ".join(x for x in [evt.get("lieu"), evt.get("ville")] if x)
+    broadcast_system_message(f"Nouvel événement : {evt['titre']}",
+                             f"{_event_when(evt)} — {lieu}" + (f"\n{evt['description']}" if evt.get("description") else "") + "\nInscrivez-vous dès maintenant.",
+                             action_url=f"/(app)/evenements/{evt['id']}", sender=user, key=f"evt-new-{evt['id']}")
+    return _evt(evt)
 
 
 @router.patch("/evenements/{eid}", response_model=Evenement)
@@ -249,6 +254,20 @@ def update_evenement(eid: str, data: EvenementUpdate, _=Depends(manage_dep)):
 
 class RappelIn(BaseModel):
     message: Optional[str] = None
+
+
+class EventImageUrlIn(BaseModel):
+    filename: str
+
+
+@router.post("/evenements/image-upload-url")
+def event_image_upload_url(data: EventImageUrlIn, _=Depends(manage_dep)):
+    """URL signée pour déposer l'affiche d'un événement (bucket public `covers`, dossier events/)."""
+    ext = (data.filename.rsplit(".", 1)[-1].lower() if "." in data.filename else "jpg")[:8]
+    path = f"events/{new_id()}.{ext}"
+    signed = sb().storage.from_("covers").create_signed_upload_url(path)
+    public_url = sb().storage.from_("covers").get_public_url(path)
+    return {"bucket": "covers", "path": path, "upload_url": signed["signed_url"], "token": signed["token"], "public_url": public_url}
 
 
 @router.post("/evenements/{eid}/rappel", status_code=201)
@@ -271,9 +290,12 @@ def send_rappel(eid: str, data: RappelIn, user=Depends(require_role(*EDITORIAL_R
 
 
 @router.delete("/evenements/{eid}", status_code=204)
-def delete_evenement(eid: str, _=Depends(admin_dep)):
-    _get_event_or_404(eid)
+def delete_evenement(eid: str, user=Depends(admin_dep)):
+    evt = _get_event_or_404(eid)
     sb().table("evenements").delete().eq("id", eid).execute()  # cascade en base
+    broadcast_system_message(f"Événement annulé : {evt['titre']}",
+                             f"L'événement « {evt['titre']} » prévu le {_event_when(evt)} est annulé.",
+                             action_url="/(app)/evenements", sender=user, key=f"evt-del-{eid}")
     return None
 
 
@@ -315,6 +337,7 @@ def _insert_participant(data, referent: Optional[str], notes: Optional[str]) -> 
     if data.profil not in PROFILS:
         raise HTTPException(400, f"Profil invalide (attendus : {PROFILS})")
     _get_event_or_404(data.evenement_id)
+    _check_duplicate_participant(data.evenement_id, data.nom, data.prenom, data.email, data.tel)
     row = {
         "id": new_id(), "evenement_id": data.evenement_id, "badge_id": _next_badge_id(data.evenement_id),
         "nom": data.nom.strip().upper(), "prenom": data.prenom.strip(), "profil": data.profil,
@@ -416,6 +439,28 @@ def _deliver_badge(participant: dict, evt: dict, *, to_user_id: Optional[str], r
     return result
 
 
+def _check_duplicate_participant(evenement_id: str, nom: str, prenom: str, email: Optional[str], tel: Optional[str],
+                                 exclude_id: Optional[str] = None) -> None:
+    """Détection de doublon multicritère (même événement) : nom+prénom, email ou téléphone identiques → 409."""
+    rows = sb().table("event_participants").select("id,nom,prenom,email,tel,badge_id").eq("evenement_id", evenement_id).execute().data
+    key = strip_accents(f"{nom} {prenom}").strip()
+    em = (email or "").strip().lower()
+    ph = re.sub(r"\D", "", tel or "")
+    for r in rows:
+        if exclude_id and r["id"] == exclude_id:
+            continue
+        reasons = []
+        if key and strip_accents(f"{r.get('nom','')} {r.get('prenom','')}").strip() == key:
+            reasons.append("même nom et prénom")
+        if em and (r.get("email") or "").lower() == em:
+            reasons.append("même adresse email")
+        if ph and len(ph) >= 6 and re.sub(r"\D", "", r.get("tel") or "") == ph:
+            reasons.append("même numéro de téléphone")
+        if reasons:
+            raise HTTPException(409, f"Doublon détecté : {r.get('prenom','')} {r.get('nom','')} est déjà inscrit(e) "
+                                     f"(badge {r.get('badge_id','')}) — {', '.join(reasons)}. Inscription refusée.")
+
+
 def _my_participant(evenement_id: str, user_id: str) -> Optional[dict]:
     res = sb().table("event_participants").select("*").eq("evenement_id", evenement_id).eq("user_id", user_id).limit(1).execute()
     return _participant(res.data[0]) if res.data else None
@@ -436,6 +481,7 @@ def register_me(data: SelfRegistrationIn, user=Depends(current_user)):
     if _my_participant(evt["id"], user["id"]):
         raise HTTPException(409, "Vous êtes déjà inscrit(e) à cet événement")
     email = (data.email or user.get("email") or "").strip().lower() or None
+    _check_duplicate_participant(evt["id"], user.get("nom") or "", user.get("prenom") or "", email, data.tel)
     row = {
         "id": new_id(), "evenement_id": evt["id"], "badge_id": _next_badge_id(evt["id"]),
         "nom": (user.get("nom") or "").strip().upper(), "prenom": (user.get("prenom") or "").strip(),
@@ -483,6 +529,7 @@ def register_other(data: OtherRegistrationIn, user=Depends(current_user)):
     if not data.nom.strip() or not data.prenom.strip():
         raise HTTPException(400, "Nom et prénom requis")
     evt = _get_event_or_404(data.evenement_id)
+    _check_duplicate_participant(evt["id"], data.nom, data.prenom, email, data.tel)
     row = {
         "id": new_id(), "evenement_id": evt["id"], "badge_id": _next_badge_id(evt["id"]),
         "nom": data.nom.strip().upper(), "prenom": data.prenom.strip(), "profil": data.profil,

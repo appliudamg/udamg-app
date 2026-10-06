@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { IntroVideo } from "@/src/IntroVideo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 
 const MAX_INTRO_MS = 12000;
 
 export default function IntroSplash() {
+  const styles = useStyles();
   const { user, loading } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -50,7 +51,7 @@ export default function IntroSplash() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
   overlay: { flex: 1, justifyContent: "flex-start", alignItems: "flex-end", paddingHorizontal: spacing.xl },
   skip: {
@@ -59,4 +60,4 @@ const styles = StyleSheet.create({
     minHeight: 44, justifyContent: "center",
   },
   skipTxt: { color: colors.onSurfaceInverse, fontWeight: "700", fontSize: 14 },
-});
+}));

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { QrCode } from "lucide-react-native";
+import { ArrowRight, ChevronLeft, QrCode } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
@@ -9,9 +9,11 @@ import { api, Message, MessageReads, ReadEntry, fmtDateTime, roleLabel } from "@
 import { canSendMessages } from "@/src/roles";
 import { useToast } from "@/src/toast";
 import { confirmAction } from "@/src/confirm";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 
 export default function MessageDetail() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -55,8 +57,18 @@ export default function MessageDetail() {
   // Lien d'action (badge) : ouvre l'écran /badge dans l'app, sinon le navigateur
   const openAction = (url: string) => {
     const i = url.indexOf("/badge?");
-    if (i >= 0) router.push(url.slice(i) as any);
-    else Linking.openURL(url).catch(() => {});
+    if (i >= 0) { router.push(url.slice(i) as any); return; }
+    if (url.startsWith("/")) { router.push(url as any); return; }
+    Linking.openURL(url).catch(() => {});
+  };
+  const actionLabel = (url: string) => {
+    if (url.includes("/badge?")) return "Voir mon badge";
+    if (url.includes("/media/pensees")) return "Lire la pensée du jour";
+    if (url.includes("/media/stories")) return "Voir la story";
+    if (url.includes("/media")) return "Écouter / regarder dans Media";
+    if (url.includes("/evenements/")) return "Ouvrir l'événement";
+    if (url.includes("/evenements")) return "Voir les événements";
+    return "Aller à";
   };
 
   const m = msg.data;
@@ -68,7 +80,7 @@ export default function MessageDetail() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="message-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>Message</Text>
         {sender && (
@@ -88,8 +100,8 @@ export default function MessageDetail() {
             <Text style={styles.body} testID="message-body" selectable>{m.body}</Text>
             {!!m.action_url && (
               <Pressable testID="message-action" onPress={() => openAction(m.action_url!)} style={styles.actionBtn}>
-                <QrCode size={18} color={colors.onBrandPrimary} />
-                <Text style={styles.actionTxt}>Voir mon badge</Text>
+                {m.action_url.includes("/badge?") ? <QrCode size={18} color={colors.onBrandPrimary} /> : <ArrowRight size={18} color={colors.onBrandPrimary} />}
+                <Text style={styles.actionTxt}>{actionLabel(m.action_url)}</Text>
               </Pressable>
             )}
             {!sender && !m.recipient_id && (
@@ -138,10 +150,10 @@ export default function MessageDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, lineHeight: 30 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: "800", color: colors.onSurface },
   delBtn: { minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.sm },
@@ -176,4 +188,4 @@ const styles = StyleSheet.create({
   personMeta: { color: colors.muted, fontSize: 11 },
   personDate: { color: colors.success, fontSize: 11, fontWeight: "600" },
   pending: { color: colors.muted },
-});
+}));

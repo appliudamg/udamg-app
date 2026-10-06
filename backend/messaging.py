@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from core import MESSAGE_SEND_ROLES, current_user, display_name, new_id, now_iso, require_role, sb
+from core import MESSAGE_SEND_ROLES, current_user, display_name, logger, new_id, now_iso, require_role, sb
 from push import broadcast_push
 
 router = APIRouter(prefix="/api")
@@ -75,6 +75,21 @@ def send_private_message(user_id: str, title: str, body: str, sender: Optional[d
     broadcast_push([user_id], title=row["title"], message=row["body"],
                    action_url=f"/(app)/messages/{row['id']}", key=f"pm-{row['id']}")
     return row
+
+
+def broadcast_system_message(title: str, body: str, action_url: Optional[str], sender: Optional[dict] = None,
+                             key: Optional[str] = None) -> None:
+    """Message d'information automatique dans la Messagerie de tous (+ push). Jamais bloquant."""
+    try:
+        row = {"id": new_id(), "sender_id": sender["id"] if sender else None,
+               "sender_name": display_name(sender) if sender else "UDAMG APP",
+               "title": title.strip()[:140], "body": body.strip(), "recipient_id": None,
+               "action_url": action_url, "created_at": now_iso()}
+        sb().table("messages").insert(row).execute()
+        broadcast_push([u["id"] for u in _recipients()], title=row["title"], message=row["body"],
+                       action_url=f"/(app)/messages/{row['id']}", key=key or f"sys-{row['id']}")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Message automatique non publié : %s", e)
 
 
 @router.get("/messages", response_model=List[Message])

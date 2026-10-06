@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, FlatList, TextInput, ActivityIndicator, RefreshControl,
+  View, Text, Pressable, FlatList, TextInput, ActivityIndicator, RefreshControl,
   KeyboardAvoidingView, Platform, Modal, ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -10,10 +10,12 @@ import { useAuth } from "@/src/auth";
 import { api, Message, fmtDateTime } from "@/src/api";
 import { canSendMessages } from "@/src/roles";
 import { useToast } from "@/src/toast";
-import { colors, spacing, radius } from "@/src/theme";
-import { Megaphone } from "lucide-react-native";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
+import { ChevronLeft, Megaphone } from "lucide-react-native";
 
 export default function MessagesList() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -45,7 +47,7 @@ export default function MessagesList() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="messages-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Messagerie</Text>
@@ -126,10 +128,10 @@ export default function MessagesList() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, lineHeight: 30 },
   title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
   sub: { fontSize: 12, color: colors.muted },
@@ -161,4 +163,4 @@ const styles = StyleSheet.create({
   footerBar: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, backgroundColor: colors.surface },
   cta: { backgroundColor: colors.brandPrimary, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center" },
   ctaTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 16 },
-});
+}));

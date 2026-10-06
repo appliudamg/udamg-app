@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from messaging import broadcast_system_message
 from core import EDITORIAL_ROLES, SUPABASE_URL, current_user, new_id, now_iso, require_role, sb
 
 router = APIRouter(prefix="/api")
@@ -67,7 +68,10 @@ def create_pensee(data: PenseeIn, user=Depends(edit_dep)):
     row = {"id": new_id(), "theme": data.theme.strip(), "texte": (data.texte or "").strip() or None,
            "date": (data.date or _date.today()).isoformat(), "image_path": data.image_path,
            "created_by": user["id"], "created_at": now_iso()}
-    return _to(sb().table("pensees").insert(row).execute().data[0])
+    created = sb().table("pensees").insert(row).execute().data[0]
+    broadcast_system_message(f"Pensée du jour : {row['theme']}", (row["texte"] or "Une nouvelle pensée du jour est disponible.")[:400],
+                             action_url=f"/(app)/media/pensees?open={row['id']}", sender=user, key=f"pensee-{row['id']}")
+    return _to(created)
 
 
 @router.patch("/pensees/{pid}", response_model=Pensee)

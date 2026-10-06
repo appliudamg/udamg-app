@@ -8,6 +8,7 @@ from qtfaststart import processor as qt_processor
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from messaging import broadcast_system_message
 from core import (
     MEDIA_WRITE_ROLES, RESTRICTED_SUBCATEGORIES, SUPABASE_URL,
     can_read_restricted_media, current_user, new_id, now_iso, require_role, sb, user_from_token,
@@ -27,6 +28,7 @@ TAXONOMY = [
     {"key": "enseignements", "label": "Enseignements", "subcategories": []},
     {"key": "reunions", "label": "Réunions", "subcategories": ["Réunion Pasteur", "Conseil élargi"]},
     {"key": "podcasts", "label": "Podcasts", "subcategories": []},
+    {"key": "louange", "label": "Louange & Adoration", "subcategories": []},
     {"key": "story", "label": "Story", "subcategories": []},
 ]
 CATEGORY_KEYS = {t["key"]: t for t in TAXONOMY}
@@ -322,7 +324,7 @@ def create_upload_url(mid: str, data: UploadUrlRequest, _=Depends(write_dep)):
 
 
 @router.post("/media/{mid}/confirm", response_model=MediaItem)
-def confirm_upload(mid: str, data: ConfirmUpload, _=Depends(write_dep)):
+def confirm_upload(mid: str, data: ConfirmUpload, user=Depends(write_dep)):
     d = get_media_or_404(mid)
     bucket = MEDIA_BUCKET if data.field == "audio" else COVER_BUCKET
     col = "audio_path" if data.field == "audio" else "cover_path"
@@ -342,7 +344,16 @@ def confirm_upload(mid: str, data: ConfirmUpload, _=Depends(write_dep)):
     if data.duration is not None:
         updates["duration"] = data.duration
     res = sb().table("media_items").update(updates).eq("id", mid).execute()
-    return attach_stream_urls([to_item(res.data[0])])[0]
+    item = to_item(res.data[0])
+    if data.field == "audio" and not old:
+        # Premier fichier déposé → message automatique « Nouveau média » dans la Messagerie (+ push)
+        label = "Nouvelle vidéo" if item.kind == "video" else "Nouveau média audio"
+        broadcast_system_message(
+            f"{label} : {item.title}",
+            f"{item.title} — {item.author}\nCatégorie : {item.category_label}{(' · ' + item.subcategory) if item.subcategory else ''}.\nDisponible dès maintenant dans Media.",
+            action_url=f"/(app)/media?open={mid}", sender=user, key=f"media-{mid}",
+        )
+    return attach_stream_urls([item])[0]
 
 
 @router.patch("/media/{mid}", response_model=MediaItem)

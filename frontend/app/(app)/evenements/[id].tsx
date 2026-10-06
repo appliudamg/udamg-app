@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, ImageBackground, Platform } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, ChevronLeft, UserPlus, UserX, QrCode, Link2, Bell, ClipboardCheck, Trash2, CalendarDays, Clock, MapPin, Users } from "lucide-react-native";
+import { BadgeCheck, ChevronLeft, UserPlus, UserX, QrCode, Link2, Bell, ClipboardCheck, Trash2, CalendarDays, Clock, MapPin, Pencil, Users } from "lucide-react-native";
 import { API_BASE } from "@/src/api";
 import { EventParticipant } from "@/src/event-api";
 import { useToast } from "@/src/toast";
@@ -12,12 +12,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, Evenement, Invitation, eventTypeLabel } from "@/src/api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { canAdminEvents, canManageEvents, canShareEventLink, canSendRappel } from "@/src/roles";
 
 const HERO_IMG = "https://images.unsplash.com/photo-1570786032462-2efc3ca8fccd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjaHVyY2glMjB3b3JzaGlwJTIwZ2F0aGVyaW5nfGVufDB8fHx8MTc4ODY1MTAxOHww&ixlib=rb-4.1.0&q=85";
 
 export default function EventDetail() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -86,7 +88,7 @@ export default function EventDetail() {
     <View style={styles.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}>
         <ImageBackground source={{ uri: evt.image_url || HERO_IMG }} style={styles.hero}>
-          <LinearGradient colors={["rgba(15,23,42,0.15)", "rgba(15,23,42,0.85)"]} style={StyleSheet.absoluteFillObject} />
+          <LinearGradient colors={["rgba(15,23,42,0.15)", "rgba(15,23,42,0.85)"]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroTop, { paddingTop: insets.top + spacing.sm }]}>
             <Pressable testID="event-detail-back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(app)/evenements"))} style={styles.backBtn}>
               <ChevronLeft size={26} color="#FFF" />
@@ -178,6 +180,12 @@ export default function EventDetail() {
                 </Pressable>
               )}
               {canManageEvents(user?.role) && (
+                <Pressable testID="event-edit" onPress={() => router.push(`/(app)/evenements/form?id=${id}`)} style={styles.actBtn}>
+                  <Pencil size={18} color={colors.brandPrimary} />
+                  <Text style={styles.actTxt}>Modifier l&apos;événement</Text>
+                </Pressable>
+              )}
+              {canManageEvents(user?.role) && (
                 <Pressable testID="event-emargement" onPress={() => router.push(`/(app)/event/${id}/hub?titre=${encodeURIComponent(evt.titre)}`)} style={styles.actBtn}>
                   <ClipboardCheck size={18} color={colors.brandPrimary} />
                   <Text style={styles.actTxt}>Émargement & gestion</Text>
@@ -227,7 +235,7 @@ export default function EventDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   keyRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   actions: { gap: spacing.sm },
   actBtn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 50, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
@@ -264,4 +272,4 @@ const styles = StyleSheet.create({
     shadowColor: colors.brandPrimary, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8,
   },
   ctaTxt: { color: colors.onBrandPrimary, fontSize: 16, fontWeight: "700", paddingBottom: spacing.md },
-});
+}));

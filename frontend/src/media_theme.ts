@@ -31,6 +31,7 @@ export const categoryHue: Record<string, string> = {
   enseignements: "#4C1D95",
   reunions: "#991B1B",
   podcasts: "#0F766E",
+  louange: "#B8860B",
   story: "#BE185D",
 };
 

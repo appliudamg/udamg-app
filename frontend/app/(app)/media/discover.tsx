@@ -12,13 +12,22 @@ import { mediaTheme, categoryHue } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
-import { Sparkles } from "lucide-react-native";
+import { ChevronLeft, Sparkles } from "lucide-react-native";
 
 const KIND_FILTERS: { key: string; label: string }[] = [
   { key: "all", label: "Tout" },
   { key: "audio", label: "Audio" },
   { key: "video", label: "Vidéo" },
 ];
+
+// Blocs principaux : Tout · Enseignements & Audio · Louange & Adoration (catégorie « louange »)
+type Section = "all" | "teaching" | "louange";
+const SECTIONS: { key: Section; label: string }[] = [
+  { key: "all", label: "Tout" },
+  { key: "teaching", label: "Enseignements & Audio" },
+  { key: "louange", label: "Louange & Adoration" },
+];
+const LOUANGE_KEY = "louange";
 
 export default function Discover() {
   const router = useRouter();
@@ -27,7 +36,13 @@ export default function Discover() {
   const player = usePlayer();
   const [q, setQ] = useState("");
   const [kind, setKind] = useState("all");
+  const [section, setSection] = useState<Section>("all");
   const [category, setCategory] = useState<string | null>(null);
+  const pickSection = (sec: Section) => {
+    setSection(sec);
+    setSubcategory(null);
+    setCategory(sec === "louange" ? LOUANGE_KEY : null);
+  };
   const [subcategory, setSubcategory] = useState<string | null>(null);
 
   const cats = useQuery({
@@ -59,7 +74,7 @@ export default function Discover() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable testID="discover-back" onPress={() => router.push("/(app)/media")} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={mediaTheme.text} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>DÉCOUVRIR</Text>
@@ -83,7 +98,25 @@ export default function Discover() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
-        style={{ maxHeight: 44 }}
+        style={{ maxHeight: 48 }}
+      >
+        {SECTIONS.map((sec) => (
+          <Pressable
+            key={sec.key}
+            testID={`section-${sec.key}`}
+            onPress={() => pickSection(sec.key)}
+            style={[styles.chip, styles.sectionChip, section === sec.key && styles.sectionChipOn]}
+          >
+            <Text style={[styles.chipTxt, styles.sectionTxt, section === sec.key && styles.chipTxtOn]}>{sec.label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+        style={{ maxHeight: 44, marginTop: 8 }}
       >
         {KIND_FILTERS.map((k) => (
           <Pressable
@@ -97,20 +130,21 @@ export default function Discover() {
         ))}
       </ScrollView>
 
+      {section !== "louange" && (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
         style={{ maxHeight: 44, marginTop: 8 }}
       >
-        <Pressable onPress={() => { setCategory(null); setSubcategory(null); }} style={[styles.chip, !category && styles.chipOn]}>
+        <Pressable testID="cat-all" onPress={() => { setCategory(null); setSubcategory(null); }} style={[styles.chip, !category && styles.chipOn]}>
           <Text style={[styles.chipTxt, !category && styles.chipTxtOn]}>Toutes catégories</Text>
         </Pressable>
         <Pressable testID="cat-pensee" onPress={() => router.push("/(app)/media/pensees" as any)} style={[styles.chip, { borderColor: mediaTheme.gold, flexDirection: "row", alignItems: "center", gap: 6 }]}>
           <Sparkles size={14} color={mediaTheme.gold} />
           <Text style={[styles.chipTxt, { color: mediaTheme.gold }]}>Pensée du jour</Text>
         </Pressable>
-        {(cats.data?.categories ?? []).map((c) => (
+        {(cats.data?.categories ?? []).filter((c) => c.key !== LOUANGE_KEY).map((c) => (
           <Pressable
             key={c.key}
             testID={`cat-${c.key}`}
@@ -124,6 +158,7 @@ export default function Discover() {
           </Pressable>
         ))}
       </ScrollView>
+      )}
 
       {!!catDef && catDef.subcategories.length > 0 && (
         <ScrollView
@@ -177,6 +212,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: mediaTheme.border, fontSize: 15,
   },
   chip: { paddingHorizontal: 14, height: 34, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card, borderWidth: 1, borderColor: mediaTheme.border },
+  sectionChip: { paddingVertical: 10, paddingHorizontal: 16 },
+  sectionChipOn: { backgroundColor: mediaTheme.gold, borderColor: mediaTheme.gold },
+  sectionTxt: { fontSize: 13, fontWeight: "800" },
   chipOn: { backgroundColor: mediaTheme.gold, borderColor: mediaTheme.gold },
   chipTxt: { color: mediaTheme.textMuted, fontWeight: "700", fontSize: 12 },
   chipTxtOn: { color: "#000" },

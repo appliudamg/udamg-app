@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { ChevronLeft } from "lucide-react-native";
 import {
-  View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator, RefreshControl,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Alert, Share,
+  View, Text, Pressable, FlatList, ActivityIndicator, RefreshControl,
+  Platform, Alert, Share,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api, Evenement, eventTypeLabel } from "@/src/api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { canManageEvents, canAdminEvents, canShareEventLink } from "@/src/roles";
 
 function formatDate(iso: string) {
@@ -18,15 +18,9 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-const EVENT_TYPES = [
-  { value: "sortie_evangelisation", label: "Sortie d'évangélisation" },
-  { value: "veillee", label: "Veillée" },
-  { value: "culte_special", label: "Culte spécial" },
-  { value: "reunion_jeunes", label: "Réunion des jeunes" },
-  { value: "reunion_anciens", label: "Réunion des anciens" },
-];
-
 export default function EvenementsList() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -34,37 +28,10 @@ export default function EvenementsList() {
   const toast = useToast();
   const canCreate = canManageEvents(user?.role);
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [f, setF] = useState({
-    titre: "", description: "", lieu: "", ville: "",
-    type_evenement: "culte_special", date: "", duree: "", horaires: "", image_url: "",
-  });
-
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["evenements"],
     queryFn: () => api<Evenement[]>("/evenements", {}, token),
     enabled: !!token,
-  });
-
-  const createMut = useMutation({
-    mutationFn: () => api<Evenement>("/evenements", {
-      method: "POST",
-      body: JSON.stringify({
-        titre: f.titre, description: f.description || null,
-        lieu: f.lieu, ville: f.ville || null,
-        type_evenement: f.type_evenement,
-        date: new Date(f.date).toISOString(),
-        intervenants: [],
-        duree: f.duree || null, horaires: f.horaires || null, image_url: f.image_url || null,
-      }),
-    }, token),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["evenements"] });
-      setCreateOpen(false);
-      setF({ titre: "", description: "", lieu: "", ville: "", type_evenement: "culte_special", date: "", duree: "", horaires: "", image_url: "" });
-      toast.show("Programme créé", "success");
-    },
-    onError: (e: any) => toast.show(e?.message || "Erreur création", "error"),
   });
 
   const deleteMut = useMutation({
@@ -111,30 +78,18 @@ export default function EvenementsList() {
     );
   };
 
-  const submit = () => {
-    if (!f.titre || !f.lieu || !f.date) {
-      toast.show("Titre, lieu et date requis", "error");
-      return;
-    }
-    if (isNaN(new Date(f.date).getTime())) {
-      toast.show("Format de date invalide (YYYY-MM-DDTHH:MM)", "error");
-      return;
-    }
-    createMut.mutate();
-  };
-
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="evenements-back" onPress={() => router.replace("/(app)/menu")} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>PÔLE 2 · PORTAIL</Text>
           <Text style={styles.title}>Événements</Text>
         </View>
         {canCreate && (
-          <Pressable testID="evenements-create" onPress={() => setCreateOpen(true)} style={styles.newBtn}>
+          <Pressable testID="evenements-create" onPress={() => router.push("/(app)/evenements/form")} style={styles.newBtn}>
             <Text style={styles.newTxt}>+ Nouveau</Text>
           </Pressable>
         )}
@@ -158,13 +113,13 @@ export default function EvenementsList() {
             canCreate ? (
               <Pressable
                 testID="evenements-create-cta"
-                onPress={() => setCreateOpen(true)}
+                onPress={() => router.push("/(app)/evenements/form")}
                 style={({ pressed }) => [styles.createCta, pressed && { opacity: 0.9 }]}
               >
                 <View style={styles.createIcon}><Text style={styles.createIconTxt}>+</Text></View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.createTitle}>Créer un nouveau programme</Text>
-                  <Text style={styles.createSub}>Culte spécial, veillée, sortie d'évangélisation…</Text>
+                  <Text style={styles.createSub}>Culte spécial, veillée, sortie d&apos;évangélisation…</Text>
                 </View>
               </Pressable>
             ) : null
@@ -224,68 +179,10 @@ export default function EvenementsList() {
         />
       )}
 
-      <Modal visible={createOpen} transparent animationType="fade" onRequestClose={() => setCreateOpen(false)}>
-        <View style={styles.modalBg}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ width: "100%" }}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Nouveau programme</Text>
-
-              <TextInput testID="create-titre" placeholder="Titre du programme"
-                         placeholderTextColor={colors.muted}
-                         value={f.titre} onChangeText={t => setF({ ...f, titre: t })}
-                         style={styles.input} />
-              <TextInput testID="create-lieu" placeholder="Lieu"
-                         placeholderTextColor={colors.muted}
-                         value={f.lieu} onChangeText={t => setF({ ...f, lieu: t })}
-                         style={styles.input} />
-              <TextInput testID="create-ville" placeholder="Ville"
-                         placeholderTextColor={colors.muted}
-                         value={f.ville} onChangeText={t => setF({ ...f, ville: t })}
-                         style={styles.input} />
-              <TextInput testID="create-duree" placeholder="Durée (ex. 3 jours, 2h)"
-                         placeholderTextColor={colors.muted}
-                         value={f.duree} onChangeText={t => setF({ ...f, duree: t })}
-                         style={styles.input} />
-              <TextInput testID="create-horaires" placeholder="Horaires & détails du programme (ex. Ven 19h · Sam 9h-18h)"
-                         placeholderTextColor={colors.muted}
-                         value={f.horaires} onChangeText={t => setF({ ...f, horaires: t })}
-                         style={[styles.input, { minHeight: 72 }]} multiline />
-              <TextInput testID="create-image" placeholder="Lien de l'affiche / logo (optionnel, https://…)"
-                         placeholderTextColor={colors.muted}
-                         value={f.image_url} onChangeText={t => setF({ ...f, image_url: t })}
-                         style={styles.input} autoCapitalize="none" />
-              <TextInput testID="create-date" placeholder="Date ISO (2026-03-15T20:00)"
-                         placeholderTextColor={colors.muted}
-                         value={f.date} onChangeText={t => setF({ ...f, date: t })}
-                         style={styles.input} />
-              <View style={styles.chipRow}>
-                {EVENT_TYPES.map(t => (
-                  <Pressable key={t.value}
-                             onPress={() => setF({ ...f, type_evenement: t.value })}
-                             style={[styles.chip, f.type_evenement === t.value && styles.chipOn]}>
-                    <Text style={[styles.chipTxt, f.type_evenement === t.value && styles.chipTxtOn]}>{t.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View style={styles.modalRow}>
-                <Pressable onPress={() => setCreateOpen(false)} style={[styles.btn, styles.btnGrey]}>
-                  <Text style={styles.btnGreyTxt}>Fermer</Text>
-                </Pressable>
-                <Pressable testID="create-submit" onPress={submit} disabled={createMut.isPending}
-                           style={[styles.btn, styles.btnPrimary, createMut.isPending && { opacity: 0.5 }]}>
-                  {createMut.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.btnPrimaryTxt}>Créer</Text>}
-                </Pressable>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
       {canCreate && (
         <Pressable
           testID="evenements-fab"
-          onPress={() => setCreateOpen(true)}
+          onPress={() => router.push("/(app)/evenements/form")}
           style={[styles.fab, { bottom: insets.bottom + spacing.lg }]}
         >
           <Text style={styles.fabTxt}>+</Text>
@@ -295,10 +192,10 @@ export default function EvenementsList() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 26, fontWeight: "800", color: colors.onSurface },
@@ -357,4 +254,4 @@ const styles = StyleSheet.create({
   btnGreyTxt: { color: colors.onSurfaceSecondary, fontWeight: "700" },
   btnPrimary: { backgroundColor: colors.brandPrimary },
   btnPrimaryTxt: { color: colors.onBrandPrimary, fontWeight: "700" },
-});
+}));

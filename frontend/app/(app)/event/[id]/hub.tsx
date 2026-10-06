@@ -1,15 +1,17 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
 import { EventDashboard } from "@/src/event-api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { canManageEvents } from "@/src/roles";
-import { Baby, BarChart3, Clock, Link2, Pause, Users } from "lucide-react-native";
+import { Baby, BarChart3, ChevronLeft, Clock, Link2, Pause, Users } from "lucide-react-native";
 
 export default function EventHub() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -29,7 +31,7 @@ export default function EventHub() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="hub-back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(app)/evenements"))} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.brand}>UDAMG</Text>
@@ -165,10 +167,10 @@ export default function EventHub() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   brand: { color: colors.brandPrimary, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
@@ -226,4 +228,4 @@ const styles = StyleSheet.create({
   miniTitle: { color: colors.onSurface, fontSize: 14, fontWeight: "800" },
   miniSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
   chev: { color: colors.brandPrimary, fontSize: 20, fontWeight: "800" },
-});
+}));

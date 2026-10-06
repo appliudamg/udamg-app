@@ -67,3 +67,11 @@ export const profilColor = (p: string): string => {
     default: return "#64748B";
   }
 };
+
+export const EVENT_TYPES = [
+  { value: "sortie_evangelisation", label: "Sortie d'évangélisation" },
+  { value: "veillee", label: "Veillée" },
+  { value: "culte_special", label: "Culte spécial" },
+  { value: "reunion_jeunes", label: "Réunion des jeunes" },
+  { value: "reunion_anciens", label: "Réunion des anciens" },
+];

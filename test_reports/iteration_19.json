@@ -1,0 +1,39 @@
+{
+  "summary": "Iter19 UDAMG — Détection de doublons bloquante (participants + utilisateurs), rôle COMEV, messages système auto (événement/pensée), bloc 'Je donne', catégorie 'louange', thème clair/sombre persistant, flèches retour, formulaire création/édition événement. Backend : 20/20 tests PASS dans /app/backend/tests/test_iter19_duplicates_comev.py (couvre /event/participants/me|other|public, POST /participants admin, POST /admin/users 409 email + 409 nom+prénom, création+suppression user comev, POST /media/create-json admin→201, GET /media/categories contient 'louange', comev POST /event/sessions/start→201 puis stop, comev GET /admin/users→403, POST /evenements→message 'Nouvel événement : …' avec action_url /(app)/evenements/<id>, PATCH titre, DELETE→message 'Événement annulé : …', POST /pensees→message 'Pensée du jour : …' avec action_url /(app)/media/pensees?open=<id>, POST /evenements/image-upload-url admin→200 avec upload_url+public_url, membre→403). Frontend web preview (viewport 390x844) : (a) admin menu-don-card visible en grand bloc ; (b) Profil : theme-light/dark/system présents, click dark → fond passe à rgb(11,18,32)=#0B1220, localStorage.udamg.theme='dark' ; après reload la préférence est conservée (fond toujours #0B1220) ; retour en light → fond blanc. (c) Users → bloc COMEV visible contenant comev.test@example.com. (d) Événements → bouton evenements-create ouvre /evenements/form, create-titre/lieu/date/submit présents ; après submit → redirect vers /evenements/<id>, event-edit + event-delete visibles ; event-edit ouvre form?id=… avec champ titre pré-rempli ; modification + create-submit → toast 'Événement modifié' détecté ; DELETE confirmé en backend (évent + 2 messages auto 'Nouvel événement' et 'Événement annulé' créés puis nettoyés). (e) Messagerie admin : 'Nouvel événement : TEST19 UI AUTO' bien présent après création. (f) COMEV login → menu sans lien /users ; events visibles (2) ; détail événement : event-emargement + event-edit présents, event-delete ABSENT (correct, admin-only) ; hub → hub-pasteur → écran PIN (pin-lock + pin-input visibles). (g) Media Discover membre : section-all/teaching/louange + kind-all/audio/video présents ; sélection de section-louange masque bien cat-all (count=0) ; retour section-all → cat-all réapparaît (count=1). (h) Chevron retour visible sur profile/users/messages/evenements/media (back-testid=1 chacun). État laissé propre : évent TEST19/messages/pensées/user TEST19 supprimés, thème repassé en light, membre non inscrit, comev.test@example.com préservé.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "textShadow* style props", "issue": "Warning console persistant 'textShadow* style props are deprecated. Use textShadow'. Carry-over iter15-18, non-bloquant."},
+      {"component": "expo-notifications web listener", "issue": "Warning '[expo-notifications] Listening to push token changes is not yet fully supported on web.' — attendu, non-bloquant."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter19_duplicates_comev.py",
+    "/app/test_reports/pytest/pytest_iter19.xml"
+  ],
+  "action_items": [
+    "(Optionnel, carry-over) Migrer les styles 'textShadow*' RN 0.79+ vers 'textShadow' pour éliminer les warnings console."
+  ],
+  "critical_code_review_comments": [
+    "events._check_duplicate_participant : normalisation via strip_accents().lower() + comparaison nom+prénom concaténés, email .lower(), tel = chiffres uniquement (len>=6). Logique correcte, appliquée dans POST /participants (admin), /participants/public, /participants/me et /participants/other. Message d'erreur HTTP 409 = 'Doublon détecté : <prénom> <nom> est déjà inscrit(e) (badge EBED-XXXX) — <raison(s)>. Inscription refusée.'",
+    "server.admin_create_user : vérification doublon email (case-insensitive) + nom+prénom (strip_accents) avec message 409 explicite — OK.",
+    "events.create_evenement / delete_evenement / pensees.create_pensee broadcastent via messaging.broadcast_system_message avec action_url correctement formée (/(app)/evenements/<id> et /(app)/media/pensees?open=<id>). Les messages ont key déterministe (`evt-new-`, `evt-del-`, `pensee-`) — bon pour idempotence.",
+    "core : ROLE_COMEV ajouté ; EVENT_MANAGE_ROLES inclut comev (sessions, création/édition d'événement, participants) ; EVENT_ADMIN_ROLES n'inclut PAS comev (donc pas de delete event / purge, correct). USER_ADMIN_ROLES = {admin} → comev → 403 sur /admin/users (vérifié).",
+    "media.MEDIA_WRITE_ROLES = {admin, equipe_technique} : admin peut bien faire POST /media/create-json → 201. Le changelog mentionne 'Équipe technique = seul rôle à ajouter des médias' côté test_credentials.md : à harmoniser côté doc client car admin a aussi ce droit en iter19 (comportement validé par tests).",
+    "/media/categories renvoie {categories:[…]} (dict, pas list) — à documenter côté front si consommation naïve.",
+    "frontend/src/confirm.ts : utilise window.confirm sur web → playwright doit page.on('dialog', d.accept) pour tester la suppression (test ajusté). Non-bloquant pour l'app réelle.",
+    "profile.tsx + theme.ts : persistance via localStorage.udamg.theme vérifiée (clé 'dark' persiste après reload, fond #0B1220 appliqué sur menu/profile/events/messages/users)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter19_duplicates_comev.py (nouveau — 20 tests)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% des flux iter19 critiques vérifiés via web preview"},
+  "seed_data_creation": "Données créées puis supprimées : 1 participant TEST (Dupont19/Éric via /other) → supprimé via admin DELETE ; 1 user TEST19/ComevTwo role comev → supprimé via DELETE /admin/users ; 1 média TEST19_media_admin → supprimé via DELETE /media ; 1 événement TEST19 UI AUTO → MODIFIE → supprimé (frontend + cleanup backend) ; 2 messages auto 'Nouvel événement/Événement annulé TEST19' → supprimés via DELETE /messages ; 1 pensée TEST19 PENSEE + message associé → supprimés. Pré-existants conservés : évents PG MJAC + 'Nuit de la bonne nouvelle', 2 participants AGOSSA Kewen, comptes 6 users (dont comev.test@example.com), thème repassé en light.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend : http://localhost:8001/api (local) ou EXPO_PUBLIC_BACKEND_URL (https://church-connect-255.preview.emergentagent.com). Évent principal = 710c3685-cbb3-4699-af0d-303017680319 (PG MJAC). Second évent pré-existant = 0cc50951-1992-44c8-8961-76c40caa6d1d (Nuit de la bonne nouvelle). testIDs iter19 validés : menu-don-card, theme-light/dark/system, section-all/teaching/louange, kind-all/audio/video, cat-all (conditionnel à section!=louange), evenements-create, create-titre/lieu/ville/date/description/create-submit, event-edit, event-delete, event-emargement, hub-pasteur, pin-lock, pin-input, message-action, message-delete. localStorage key : 'udamg.theme' = 'light'|'dark'|'system'. Admin DELETE /messages/{id} pour nettoyer les messages auto. Pas d'endpoint DELETE /event/sessions (gap pré-existant iter18). Pour tester window.confirm côté playwright → `page.on('dialog', lambda d: d.accept())`.",
+  "rca_of_issue": "Aucun bug à investiguer en iter19. Note test runs : 2 ajustements du test backend ont été nécessaires avant stabilisation — (a) les noms de participants dans les tests de doublon utilisaient un préfixe 'TEST19_' qui faussait la comparaison strip_accents (strings différents côté base vs côté test), remplacé par 'Dupont19/DUPONT19' (base & dup partagent exactement le même nom hors accents/casse) ; (b) /media/categories retourne un dict {categories:[…]}, pas une liste — ajusté. La fonctionnalité backend elle-même est 100% conforme au spec."
+}

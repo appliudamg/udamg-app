@@ -1,14 +1,16 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import QRCode from "react-native-qrcode-svg";
 import { api } from "@/src/api";
 import { EventParticipant, profilColor } from "@/src/event-api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { X } from "lucide-react-native";
 
 export default function Badge() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { event, b } = useLocalSearchParams<{ event: string; b: string }>();
@@ -70,7 +72,7 @@ export default function Badge() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surfaceInverse },
   wrap: { alignItems: "center", padding: spacing.xl, gap: spacing.lg, flexGrow: 1, justifyContent: "center" },
   close: { position: "absolute", top: spacing.md, right: spacing.md, width: 40, height: 40, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
@@ -101,4 +103,4 @@ const styles = StyleSheet.create({
   errTxt: { color: "#FFFFFF" },
   linkBtn: { padding: spacing.md },
   linkTxt: { color: "#FFFFFF" },
-});
+}));

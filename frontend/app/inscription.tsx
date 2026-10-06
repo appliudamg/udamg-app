@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, TextInput, ScrollView, KeyboardAvoidingView,
+  View, Text, Pressable, TextInput, ScrollView, KeyboardAvoidingView,
   Platform, ActivityIndicator, Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -9,10 +9,12 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast, ToastProvider } from "@/src/toast";
 import { api } from "@/src/api";
 import { EVENT_PROFILS, CATEGORIES_AGE, EventParticipant, EventProfil, CategorieAge, profilColor } from "@/src/event-api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { CheckCircle2 } from "lucide-react-native";
 
 function Inner() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
@@ -172,7 +174,7 @@ export default function Inscription() {
   return <ToastProvider><Inner /></ToastProvider>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   brand: { fontSize: 24, fontWeight: "800", color: colors.brandPrimary, textAlign: "center", letterSpacing: 2 },
   title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, textAlign: "center", marginTop: spacing.sm },
@@ -198,4 +200,4 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm },
   guideItem: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 20 },
   guideKey: { color: colors.brandPrimary, fontWeight: "800" },
-});
+}));

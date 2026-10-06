@@ -140,3 +140,19 @@ frontend:
   - task: "PinLock Espace Pasteur (0123)" ; implemented: true ; file: src/event/PinLock.tsx, app/(app)/event/[id]/pasteur.tsx
   - task: "Je donne (menu + lecteur), lecteur global dans app/(app)/_layout.tsx" ; implemented: true
 credentials: voir /app/memory/test_credentials.md
+
+## Itération 19 — Doublons, COMEV, thème sombre, messages auto, Découvrir, édition événement (Juin 2026)
+user_problem_statement: >
+  1) Doublons bloquants (409) : inscriptions événement (nom+prénom / email / tel, même événement) et création utilisateur (email ou nom+prénom).
+  2) « Je donne » en grand bloc image sur l'accueil. 3) Admin = droits totaux (écriture média incluse) ; rôle COMEV (émargement & gestion événements).
+  4) Mini-lecteur : croix (mini-player-close) qui arrête la lecture. 5) Messages automatiques (+push) : nouveau média (1er fichier confirmé),
+  story, pensée, création/annulation d'événement — avec action_url et bouton « Aller à » dans le détail du message.
+  6) Thème Clair/Sombre/Adaptatif (Profil → Apparence, testID theme-light/dark/system) appliqué à toutes les pages (makeStyles/useTheme).
+  7) Découvrir : blocs Tout / Enseignements & Audio / Louange & Adoration (section-*), filtres Audio/Vidéo, catégories masquées pour Louange.
+  8) Événements : écran form.tsx (création + modification ?id=, import d'image via /evenements/image-upload-url) ; bouton « Modifier l'événement » (event-edit).
+  9) Flèches retour ChevronLeft visibles partout.
+backend:
+  - task: "Doublons participants/utilisateurs 409, rôle comev, MEDIA_WRITE admin, broadcast_system_message, image-upload-url" ; implemented: true
+frontend:
+  - task: "Thème, Découvrir, form événement, mini-player X, menu Je donne, COMEV bloc users" ; implemented: true
+credentials: voir /app/memory/test_credentials.md (COMEV : comev.test@example.com / ComevTest2026!)

@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { ChevronLeft } from "lucide-react-native";
 import {
-  View, Text, StyleSheet, Pressable, ActivityIndicator, Modal, TextInput,
+  View, Text, Pressable, ActivityIndicator, Modal, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,11 +9,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 
 type EnfantsResp = { total: number; session_id: string | null; session_nom: string | null };
 
 export default function Enfants() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
@@ -47,7 +50,7 @@ export default function Enfants() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="enfants-back" onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>{titre || ""}</Text>
@@ -142,10 +145,10 @@ export default function Enfants() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
@@ -178,4 +181,4 @@ const styles = StyleSheet.create({
   btnGreyTxt: { color: colors.onSurfaceSecondary, fontWeight: "700" },
   btnPrimary: { backgroundColor: colors.brandPrimary },
   btnPrimaryTxt: { color: colors.onBrandPrimary, fontWeight: "700" },
-});
+}));

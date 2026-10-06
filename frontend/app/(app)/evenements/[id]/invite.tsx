@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, User, Invitation, roleLabel } from "@/src/api";
-import { colors, spacing, radius } from "@/src/theme";
-import { Check } from "lucide-react-native";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
+import { Check, ChevronLeft } from "lucide-react-native";
 
 export default function InviteElders() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
@@ -60,7 +62,7 @@ export default function InviteElders() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="invite-back" onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <View style={styles.badgeRow}>
@@ -126,10 +128,10 @@ export default function InviteElders() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   badgeRow: { flexDirection: "row" },
   badge: { backgroundColor: colors.brandPrimary, color: colors.onBrandPrimary, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill, fontSize: 11, fontWeight: "800", overflow: "hidden" },
@@ -163,4 +165,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceInverse, padding: spacing.md, borderRadius: radius.md,
   },
   toastTxt: { color: colors.onSurfaceInverse, textAlign: "center", fontWeight: "600" },
-});
+}));

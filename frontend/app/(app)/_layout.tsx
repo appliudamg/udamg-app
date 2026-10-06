@@ -1,14 +1,16 @@
 import { useEffect } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useAuth } from "@/src/auth";
 import { registerForPush } from "@/src/push";
 import { PlayerProvider } from "@/src/player";
 import { MiniPlayer } from "@/src/media/MiniPlayer";
 import { PlayerModal } from "@/src/media/PlayerModal";
-import { colors } from "@/src/theme";
+import { useTheme, makeStyles } from "@/src/theme";
 
 export default function AppLayout() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -46,7 +48,7 @@ export default function AppLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   center: { flex: 1, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-});
+}));

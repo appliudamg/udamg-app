@@ -10,8 +10,8 @@ import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
 import { EventDashboard, EventParticipant } from "@/src/event-api";
-import { colors, spacing, radius } from "@/src/theme";
-import { AlertTriangle, Camera, Check, CheckCircle2, SwitchCamera, X, XCircle } from "lucide-react-native";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
+import { AlertTriangle, Camera, Check, CheckCircle2, ChevronLeft, SwitchCamera, X, XCircle } from "lucide-react-native";
 
 type ScanResult = {
   kind: "ok" | "already" | "error";
@@ -21,6 +21,8 @@ type ScanResult = {
 };
 
 export default function Scanner() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
@@ -103,7 +105,7 @@ export default function Scanner() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="scanner-back" onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>{titre || ""}</Text>
@@ -223,10 +225,10 @@ export default function Scanner() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
@@ -246,7 +248,7 @@ const styles = StyleSheet.create({
   permTxt: { color: "#FFFFFF", fontWeight: "700" },
   permBtn: { backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, borderRadius: radius.md, marginTop: spacing.xs },
   permBtnTxt: { color: "#FFFFFF", fontWeight: "700" },
-  overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  overlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   frame: { width: 180, height: 180, borderColor: "rgba(255,255,255,0.9)", borderWidth: 3, borderRadius: radius.md },
   controls: { flexDirection: "row", justifyContent: "center", gap: spacing.md, paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
   controlBtn: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
@@ -271,4 +273,4 @@ const styles = StyleSheet.create({
   historyKind: { fontSize: 14, fontWeight: "800" },
   historyMsg: { flex: 1, color: colors.onSurface, fontSize: 13 },
   historyTime: { color: colors.muted, fontSize: 11 },
-});
+}));

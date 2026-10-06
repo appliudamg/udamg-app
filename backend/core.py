@@ -70,12 +70,13 @@ ROLE_LEADER = "leader"
 ROLE_OUVRIER = "ouvrier"
 ROLE_DISCIPLE = "disciple"
 ROLE_MEMBRE = "membre"
+ROLE_COMEV = "comev"  # Comité d'organisation des événements : émargement & gestion
 
 ROLES = [ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR, ROLE_MISSIONNAIRE, ROLE_BERGER,
-         ROLE_LEADER, ROLE_OUVRIER, ROLE_DISCIPLE, ROLE_MEMBRE]
+         ROLE_LEADER, ROLE_OUVRIER, ROLE_DISCIPLE, ROLE_MEMBRE, ROLE_COMEV]
 
-# Media : écriture réservée à l'Équipe technique
-MEDIA_WRITE_ROLES = {ROLE_TECH}
+# Media : écriture — Équipe technique + Admin (droits totaux)
+MEDIA_WRITE_ROLES = {ROLE_ADMIN, ROLE_TECH}
 # Media : lecture complète (y compris Réunion Pasteur / Conseil élargi)
 MEDIA_FULL_READ_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR, ROLE_MISSIONNAIRE, ROLE_BERGER}
 RESTRICTED_SUBCATEGORIES = {"Réunion Pasteur", "Conseil élargi"}
@@ -85,7 +86,7 @@ MESSAGE_SEND_ROLES = {ROLE_ADMIN, ROLE_TECH}
 USER_ADMIN_ROLES = {ROLE_ADMIN}
 # Événements : gestion & émargement (création, inscrits, séances, pointage) — jamais pour
 # Membres / Disciples / Ouvriers / Leaders / Bergers / Missionnaires
-EVENT_MANAGE_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR}
+EVENT_MANAGE_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR, ROLE_COMEV}
 EVENT_ADMIN_ROLES = {ROLE_ADMIN, ROLE_TECH, ROLE_PASTEUR}
 # Copier le lien d'inscription : tous sauf Membre simple
 EVENT_SHARE_EXCLUDED = {ROLE_MEMBRE}

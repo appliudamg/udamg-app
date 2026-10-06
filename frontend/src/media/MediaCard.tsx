@@ -40,7 +40,7 @@ export function MediaCard({
         onPress={onPress}
         style={({ pressed }) => [styles.hero, { backgroundColor: hue }, pressed && { opacity: 0.9 }]}
       >
-        {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFillObject} resizeMode="cover" /> : null}
+        {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
         <View style={styles.heroOverlay}>
           <Text style={styles.heroEyebrow}>{item.category_label.toUpperCase()}{item.subcategory ? ` · ${item.subcategory.toUpperCase()}` : ""}</Text>
           <Text style={styles.heroTitle} numberOfLines={2}>{item.title}</Text>

@@ -1,18 +1,21 @@
 import { useState } from "react";
 import {
   Image,
-  View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
+  View, Text, TextInput, Pressable, KeyboardAvoidingView,
   Platform, ActivityIndicator, ScrollView, Clipboard as RNClipboard,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { Lock } from "lucide-react-native";
 import { PasswordInput } from "@/src/PasswordInput";
 
 export default function Login() {
+  const styles = useStyles();
+  const deniedStyles = useDeniedStyles();
+  const { colors } = useTheme();
   const { login, denied, clearDenied } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -144,7 +147,7 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { paddingHorizontal: spacing.xl, gap: spacing.md },
   header: { alignItems: "center", marginBottom: spacing.xxl, gap: spacing.xs },
@@ -185,9 +188,9 @@ const styles = StyleSheet.create({
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
   footerText: { color: colors.muted },
   footerLink: { color: colors.brandPrimary, fontWeight: "600" },
-});
+}));
 
-const deniedStyles = StyleSheet.create({
+const useDeniedStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface, padding: spacing.xl, alignItems: "center" },
   iconWrap: { width: 96, height: 96, borderRadius: 48, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: spacing.lg, marginTop: spacing.xl },
   icon: { fontSize: 48 },
@@ -201,5 +204,5 @@ const deniedStyles = StyleSheet.create({
   hint: { fontSize: 13, color: colors.muted, textAlign: "center", lineHeight: 20, marginBottom: spacing.xl, paddingHorizontal: spacing.md },
   backBtn: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, minHeight: 48, alignItems: "center", justifyContent: "center" },
   backTxt: { color: colors.onSurface, fontWeight: "700", fontSize: 14 },
-});
+}));
 

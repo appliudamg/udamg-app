@@ -1,12 +1,13 @@
 import type { Role } from "./api";
 
 // Matrice de droits — miroir de backend/core.py
-export const MEDIA_WRITE_ROLES: Role[] = ["equipe_technique"];
+export const MEDIA_WRITE_ROLES: Role[] = ["admin", "equipe_technique"];
 export const MEDIA_FULL_READ_ROLES: Role[] = ["admin", "equipe_technique", "pasteur", "missionnaire", "berger"];
 export const MESSAGE_SEND_ROLES: Role[] = ["admin", "equipe_technique"];
 export const USER_ADMIN_ROLES: Role[] = ["admin"];
 // Gestion & émargement (jamais pour membre/disciple/ouvrier/leader/berger/missionnaire)
-export const EVENT_MANAGE_ROLES: Role[] = ["admin", "equipe_technique", "pasteur"];
+// COMEV : comité événements → émargement & gestion (l'Espace Pasteur reste protégé par PIN)
+export const EVENT_MANAGE_ROLES: Role[] = ["admin", "equipe_technique", "pasteur", "comev"];
 export const EVENT_ADMIN_ROLES: Role[] = ["admin", "equipe_technique", "pasteur"];
 export const EDITORIAL_ROLES: Role[] = ["admin", "equipe_technique"];
 

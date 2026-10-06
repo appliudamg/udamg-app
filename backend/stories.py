@@ -5,6 +5,7 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from messaging import broadcast_system_message
 from core import MEDIA_WRITE_ROLES, SUPABASE_URL, current_user, new_id, now_iso, require_role, sb
 
 router = APIRouter(prefix="/api")
@@ -110,6 +111,9 @@ def story_confirm(sid: str, data: ConfirmUpload, user=Depends(write_dep)):
         except Exception:
             pass
     res = sb().table("stories").update({"media_path": data.path}).eq("id", sid).execute()
+    if not d.get("media_path"):
+        broadcast_system_message("Nouvelle story", (d.get("caption") or "Une nouvelle story vient d'être publiée.") + "\nÀ découvrir dans Media.",
+                                 action_url="/(app)/media/stories", sender=user, key=f"story-{sid}")
     return _to_story(res.data[0], False, 0, f"{user.get('prenom', '')} {user.get('nom', '')}".strip())
 
 

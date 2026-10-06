@@ -186,3 +186,15 @@ Streaming premium (thème sombre or/rouge/violet) inspiré de DS Audio + ImpactX
 Emergent Managed Object Storage — path convention `udamg/media/{id}/audio.{ext}` + `cover.{ext}`.
 La lecture en arrière-plan / verrouillage écran est activée (audio mode) mais nécessite un **build natif** pour tests réels (pas Expo Go).
 
+
+## Itération 19 (juin 2026)
+- **Doublons bloquants (409)** : participants (même événement : nom+prénom sans accents/casse, email, téléphone normalisé) sur tous les points d'inscription ; utilisateurs (email ou nom+prénom) à la création Admin. Message explicite « Doublon détecté … refusé(e) ».
+- **Rôles** : Admin = droits totaux (écriture média incluse : `MEDIA_WRITE_ROLES = {admin, equipe_technique}`) ; nouveau rôle **COMEV** (`comev`, migration `003_role_comev.sql`) → `EVENT_MANAGE_ROLES` (émargement & gestion, séances, inscrits ; Espace Pasteur toujours protégé par PIN 0123 ; pas d'accès utilisateurs). Bloc COMEV dans Équipe & Utilisateurs (entre Pasteur et Admin).
+- **Accueil** : « Je donne » en grand bloc image (comme Événements / Media).
+- **Mini-lecteur** : croix `mini-player-close` → `player.stop()` (arrêt + fermeture).
+- **Messages automatiques** (`messaging.broadcast_system_message`, + push) : nouveau média (1er fichier audio/vidéo confirmé → `/(app)/media?open=<id>` lit directement), story (`/(app)/media/stories`), pensée (`/(app)/media/pensees?open=<id>`), création d'événement (`/(app)/evenements/<id>`), annulation (`/(app)/evenements`). Détail message : bouton « Aller à » contextuel (`action_url`). Aucun message pour les changements de rôle.
+- **Thème** : `ThemeProvider` (`src/theme.ts`, préférence `udamg.theme` en AsyncStorage : light / dark / system) ; palette `dark` ; tous les écrans convertis en `makeStyles((colors) => …)` + `useTheme()` (script `frontend/scripts/themify.py`). Sélecteur Profil → Apparence (Clair / Sombre / Adaptatif). Le bloc Media garde son thème sombre dédié (`mediaTheme`).
+- **Découvrir** : blocs Tout · Enseignements & Audio · Louange & Adoration (nouvelle catégorie média `louange`), filtres Audio / Vidéo ; pour Louange la liste s'affiche directement (pas de sous-catégories).
+- **Événements** : écran `app/(app)/evenements/form.tsx` (création + modification `?id=`) avec import d'affiche (`POST /api/evenements/image-upload-url` → bucket public `covers/events/`) ; bouton « Modifier l'événement » (admin/tech/pasteur/comev). Modal de création supprimée de la liste.
+- **Retour** : `ChevronLeft` lucide visible (cercle bordé bleu) sur toutes les pages.
+- Tests : `backend/tests/test_iter19_duplicates_comev.py` 20/20 ; frontend validé (iteration_19).

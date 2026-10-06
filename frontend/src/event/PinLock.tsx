@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, Pressable, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Lock, ChevronLeft } from "lucide-react-native";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 
 export const PASTEUR_PIN = "0123";
 
 /** Écran de verrouillage par code à 4 chiffres (Espace Pasteur). Demandé à chaque ouverture. */
 export function PinLock({ title, onUnlock, onCancel }: { title?: string; onUnlock: () => void; onCancel: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
@@ -69,7 +71,7 @@ export function PinLock({ title, onUnlock, onCancel }: { title?: string; onUnloc
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
@@ -84,4 +86,4 @@ const styles = StyleSheet.create({
   dotErr: { borderColor: colors.error, backgroundColor: colors.error },
   hidden: { position: "absolute", opacity: 0.01, width: 1, height: 1 },
   err: { color: colors.error, fontWeight: "700", marginTop: spacing.sm },
-});
+}));

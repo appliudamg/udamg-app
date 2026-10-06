@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation } from "@tanstack/react-query";
@@ -7,15 +7,18 @@ import { useAuth } from "@/src/auth";
 import { api, roleLabel } from "@/src/api";
 import { canReadRestrictedMedia, canSendMessages, canWriteMedia, canManageUsers, canManageEvents, canViewAccessRights } from "@/src/roles";
 import { useToast } from "@/src/toast";
-import { colors, spacing, radius } from "@/src/theme";
-import { Check, Minus } from "lucide-react-native";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
+import { Check, ChevronLeft, Minus, Moon, Sun, SunMoon } from "lucide-react-native";
 import { PasswordInput } from "@/src/PasswordInput";
 
 export default function Profile() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { show: toast } = useToast();
   const { user, token, logout } = useAuth();
+  const { preference, setPreference } = useTheme();
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
 
@@ -42,7 +45,7 @@ export default function Profile() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable testID="profile-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}><Text style={styles.backTxt}>‹</Text></Pressable>
+        <Pressable testID="profile-back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}><ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} /></Pressable>
         <Text style={styles.title}>Mon profil</Text>
       </View>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]} keyboardShouldPersistTaps="handled">
@@ -67,6 +70,26 @@ export default function Profile() {
           </>
         )}
 
+        <Text style={styles.section}>Apparence</Text>
+        <View style={styles.box}>
+          <View style={styles.themeRow}>
+            {([
+              { key: "light", label: "Clair", Icon: Sun },
+              { key: "dark", label: "Sombre", Icon: Moon },
+              { key: "system", label: "Adaptatif", Icon: SunMoon },
+            ] as const).map(({ key, label, Icon }) => {
+              const on = preference === key;
+              return (
+                <Pressable key={key} testID={`theme-${key}`} onPress={() => setPreference(key)} style={[styles.themeBtn, on && styles.themeBtnOn]}>
+                  <Icon size={18} color={on ? colors.onBrandPrimary : colors.onSurface} />
+                  <Text style={[styles.themeTxt, on && { color: colors.onBrandPrimary }]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.themeHint}>Adaptatif suit le réglage clair / sombre (Night Shift) de votre téléphone.</Text>
+        </View>
+
         <Text style={styles.section}>Changer mon mot de passe</Text>
         <View style={styles.box}>
           <PasswordInput testID="pwd-current" value={cur} onChangeText={setCur} placeholder="Mot de passe actuel" placeholderTextColor={colors.muted} inputStyle={styles.input} />
@@ -84,10 +107,10 @@ export default function Profile() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, lineHeight: 30 },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
   scroll: { paddingHorizontal: spacing.xl, gap: spacing.md },
@@ -101,6 +124,11 @@ const styles = StyleSheet.create({
   section: { color: colors.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1.5, textTransform: "uppercase", marginTop: spacing.sm },
   box: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
   right: { flexDirection: "row", gap: spacing.md, alignItems: "center", minHeight: 32 },
+  themeRow: { flexDirection: "row", gap: spacing.sm },
+  themeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  themeBtnOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  themeTxt: { color: colors.onSurface, fontWeight: "700", fontSize: 13 },
+  themeHint: { color: colors.muted, fontSize: 12 },
   rightIcon: { fontWeight: "800", width: 18, textAlign: "center" },
   rightTxt: { color: colors.onSurface, flex: 1 },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, minHeight: 50, backgroundColor: colors.surface, color: colors.onSurface, fontSize: 15 },
@@ -108,4 +136,4 @@ const styles = StyleSheet.create({
   ctaTxt: { color: colors.onBrandPrimary, fontWeight: "800" },
   logout: { marginTop: spacing.lg, minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.error, alignItems: "center", justifyContent: "center" },
   logoutTxt: { color: colors.error, fontWeight: "800" },
-});
+}));

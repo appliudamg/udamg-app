@@ -12,7 +12,7 @@ import { mediaTheme } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
-import { ListMusic } from "lucide-react-native";
+import { ChevronLeft, ListMusic } from "lucide-react-native";
 
 type Tab = "playlists" | "favorites";
 
@@ -76,7 +76,7 @@ export default function Library() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable testID="library-back" onPress={() => router.push("/(app)/media")} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={mediaTheme.text} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>BIBLIOTHÈQUE</Text>

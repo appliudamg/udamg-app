@@ -38,6 +38,7 @@ type Ctx = {
 
   play: (item: MediaItem, queue?: MediaItem[]) => Promise<void>;
   toggle: () => void;
+  stop: () => void;
   seek: (sec: number) => void;
   seekBy: (deltaSec: number) => void;
   next: () => void;
@@ -210,6 +211,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     else { p.play(); setIsPlaying(true); }
   }, [positionSec, saveProgress]);
 
+  // Fermer la lecture (croix du mini-lecteur) : arrêt + disparition du lecteur
+  const stop = useCallback(() => {
+    const p = playerRef.current;
+    if (p) {
+      try { p.pause(); } catch {}
+      try { p.clearLockScreenControls?.(); } catch {}
+      try { p.removeAllListeners?.("playbackStatusUpdate"); } catch {}
+      try { p.remove(); } catch {}
+      playerRef.current = null;
+    }
+    saveProgress(positionSec);
+    setIsPlaying(false);
+    setPlayerVisible(false);
+    setCurrent(null);
+    setQueue([]);
+    setPositionSec(0);
+    setDurationSec(0);
+  }, [positionSec, saveProgress]);
+
   const seek = useCallback((sec: number) => {
     const p = playerRef.current;
     if (!p) return;
@@ -314,12 +334,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const value: Ctx = useMemo(() => ({
     current, queue, isPlaying, positionSec, durationSec, playbackRate, favorites,
     playerVisible, sleepTimer, sleepRemainingSec,
-    play, toggle, seek, seekBy, next, prev, setRate, setSleepTimer,
+    play, toggle, stop, seek, seekBy, next, prev, setRate, setSleepTimer,
     openPlayer, closePlayer, toggleFavorite, isFavorite, refreshFavorites,
   }), [
     current, queue, isPlaying, positionSec, durationSec, playbackRate, favorites,
     playerVisible, sleepTimer, sleepRemainingSec,
-    play, toggle, seek, seekBy, next, prev, setRate, setSleepTimer,
+    play, toggle, stop, seek, seekBy, next, prev, setRate, setSleepTimer,
     openPlayer, closePlayer, toggleFavorite, isFavorite, refreshFavorites,
   ]);
 

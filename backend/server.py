@@ -12,6 +12,7 @@ from core import (
     password_hash, public_user, require_role, sb,
 )
 import events
+from events import strip_accents
 import media
 import messaging
 import push
@@ -20,7 +21,7 @@ import pensees
 from mailer import send_credentials_email
 
 RoleLiteral = Literal["admin", "equipe_technique", "pasteur", "missionnaire", "berger",
-                      "leader", "ouvrier", "disciple", "membre"]
+                      "leader", "ouvrier", "disciple", "membre", "comev"]
 
 
 # --------------------------------------------------------------------------- #
@@ -160,8 +161,13 @@ def admin_list_users(_=Depends(admin_dep)):
 @api.post("/admin/users", response_model=UserSaved, status_code=201)
 def admin_create_user(data: UserCreate, _=Depends(admin_dep)):
     email = data.email.strip().lower()
-    if sb().table("users").select("id").eq("email", email).execute().data:
-        raise HTTPException(409, "Un compte avec cet email existe déjà")
+    existing = sb().table("users").select("id,email,nom,prenom,role").execute().data
+    key = strip_accents(f"{data.nom} {data.prenom}").strip()
+    for u in existing:
+        if u["email"].lower() == email:
+            raise HTTPException(409, f"Doublon détecté : un compte avec l'email {email} existe déjà ({u.get('prenom','')} {u.get('nom','')}, rôle {u.get('role','')}). Création refusée.")
+        if strip_accents(f"{u.get('nom','')} {u.get('prenom','')}").strip() == key:
+            raise HTTPException(409, f"Doublon détecté : {u.get('prenom','')} {u.get('nom','')} existe déjà ({u['email']}, rôle {u.get('role','')}). Création refusée.")
     row = {
         "id": new_id(), "email": email, "nom": data.nom.strip(), "prenom": data.prenom.strip(),
         "role": data.role, "password_hash": password_hash.hash(data.password or new_id()),

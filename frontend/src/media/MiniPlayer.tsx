@@ -4,11 +4,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/src/player";
 import { mediaTheme, initialsOf, categoryHue } from "@/src/media_theme";
 import { mediaCoverUrl } from "@/src/api";
-import { Pause, Play } from "lucide-react-native";
+import { Pause, Play, X } from "lucide-react-native";
 
 export function MiniPlayer() {
   const insets = useSafeAreaInsets();
-  const { current, isPlaying, positionSec, durationSec, toggle, openPlayer } = usePlayer();
+  const { current, isPlaying, positionSec, durationSec, toggle, openPlayer, stop } = usePlayer();
 
   if (!current) return null;
 
@@ -44,6 +44,15 @@ export function MiniPlayer() {
           style={styles.playBtn}
         >
           {isPlaying ? <Pause size={16} color="#000" fill="#000" /> : <Play size={16} color="#000" fill="#000" />}
+        </Pressable>
+        <Pressable
+          testID="mini-player-close"
+          accessibilityLabel="Fermer la lecture"
+          onPress={(e) => { e.stopPropagation?.(); stop(); }}
+          hitSlop={10}
+          style={styles.closeBtn}
+        >
+          <X size={18} color={mediaTheme.text} />
         </Pressable>
       </View>
     </Pressable>
@@ -82,5 +91,5 @@ const styles = StyleSheet.create({
     backgroundColor: mediaTheme.gold,
     alignItems: "center", justifyContent: "center",
   },
-  playIcon: { color: "#000", fontWeight: "900", fontSize: 14 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card, borderWidth: 1, borderColor: mediaTheme.border },
 });

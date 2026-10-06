@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { ChevronLeft } from "lucide-react-native";
 import {
   View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Platform, Alert,
 } from "react-native";
@@ -77,7 +78,7 @@ export default function PlaylistDetail() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable testID="pl-back" onPress={() => router.push("/(app)/media/library")} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={mediaTheme.text} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>PLAYLIST</Text>

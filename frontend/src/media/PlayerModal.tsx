@@ -45,7 +45,7 @@ export function PlayerModal() {
       <View style={styles.root}>
         <LinearGradient
           colors={[hue, mediaTheme.bg]}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           locations={[0, 0.6]}
         />
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -195,7 +195,7 @@ function VideoScreen({
       <VideoView
         style={videoStyles.player}
         player={player}
-        allowsFullscreen
+        fullscreenOptions={{ enable: true }}
         allowsPictureInPicture
         contentFit="contain"
         nativeControls

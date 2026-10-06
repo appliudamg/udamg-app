@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
@@ -12,7 +12,7 @@ import { MediaCard } from "@/src/media/MediaCard";
 import { usePlayer } from "@/src/player";
 import { BottomNav } from "@/src/media/BottomNav";
 import { canWriteMedia } from "@/src/roles";
-import { Settings } from "lucide-react-native";
+import { ChevronLeft, Settings } from "lucide-react-native";
 import { StoriesStrip } from "@/src/media/StoriesStrip";
 
 export default function MediaHome() {
@@ -43,6 +43,18 @@ export default function MediaHome() {
     return Array.from(m.entries());
   }, [media.data]);
 
+  // Ouverture directe depuis un message automatique « Nouveau média » (/(app)/media?open=<id>)
+  const { open } = useLocalSearchParams<{ open?: string }>();
+  const openedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !media.data || openedRef.current === open) return;
+    const it = media.data.find((m) => m.id === open);
+    if (!it) return;
+    openedRef.current = open;
+    player.play(it, media.data).catch(() => {});
+    player.openPlayer();
+  }, [open, media.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const featured = (media.data ?? []).slice(0, 5);
   const isLoading = media.isLoading;
 
@@ -55,7 +67,7 @@ export default function MediaHome() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable testID="media-back" onPress={() => router.push("/(app)/menu")} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={mediaTheme.text} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>UDAMG · MEDIA</Text>

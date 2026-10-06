@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator,
+  View, Text, Pressable, FlatList, ActivityIndicator,
   Modal, TextInput, ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -11,12 +11,14 @@ import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
 import { EventDashboard, EventSession, PointageRecord } from "@/src/event-api";
 import { downloadExport } from "@/src/downloads";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, useTheme, makeStyles } from "@/src/theme";
 import { canAdminEvents } from "@/src/roles";
 import { PinLock } from "@/src/event/PinLock";
-import { Trash2 } from "lucide-react-native";
+import { ChevronLeft, Trash2 } from "lucide-react-native";
 
 export default function Pasteur() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -114,7 +116,7 @@ export default function Pasteur() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable testID="pasteur-back" onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={colors.brandPrimary} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>{titre || ""}</Text>
@@ -267,6 +269,7 @@ export default function Pasteur() {
 }
 
 function KpiBox({ label, num, total, color, testID }: { label: string; num: number; total?: number; color: string; testID: string }) {
+  const stylesKpi = useStylesKpi();
   const pct = total && total > 0 ? Math.round((num / total) * 100) : null;
   return (
     <View style={[stylesKpi.wrap, { borderLeftColor: color }]} testID={testID}>
@@ -279,7 +282,7 @@ function KpiBox({ label, num, total, color, testID }: { label: string; num: numb
   );
 }
 
-const stylesKpi = StyleSheet.create({
+const useStylesKpi = makeStyles((colors) => ({
   wrap: {
     flexBasis: "47%", flexGrow: 1,
     backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md,
@@ -289,12 +292,12 @@ const stylesKpi = StyleSheet.create({
   lbl: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   num: { fontSize: 26, fontWeight: "900", marginTop: 2 },
   pct: { color: colors.muted, fontSize: 11, fontWeight: "600" },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.brandPrimary },
   backTxt: { fontSize: 28, color: colors.onSurface, marginTop: -4 },
   eyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
@@ -342,4 +345,4 @@ const styles = StyleSheet.create({
   btnGrey: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
   btnGreyTxt: { color: colors.onSurfaceSecondary, fontWeight: "700" },
   btnPrimaryTxt: { color: colors.onBrandPrimary, fontWeight: "700" },
-});
+}));

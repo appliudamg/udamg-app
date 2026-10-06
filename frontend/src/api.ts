@@ -10,7 +10,7 @@ export const API_BASE = BASE;
 
 export type Role =
   | "admin" | "equipe_technique" | "pasteur" | "missionnaire" | "berger"
-  | "leader" | "ouvrier" | "disciple" | "membre";
+  | "leader" | "ouvrier" | "disciple" | "membre" | "comev";
 
 export type User = {
   id: string; email: string; nom: string; prenom: string; role: Role;
@@ -162,6 +162,7 @@ export const ROLES: { value: Role; label: string }[] = [
   { value: "ouvrier", label: "Ouvrier" },
   { value: "disciple", label: "Disciple" },
   { value: "membre", label: "Membre" },
+  { value: "comev", label: "COMEV" },
 ];
 
 export const roleLabel = (r: Role): string => ROLES.find((x) => x.value === r)?.label ?? r;

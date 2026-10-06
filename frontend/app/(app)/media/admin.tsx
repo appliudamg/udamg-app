@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ChevronLeft } from "lucide-react-native";
 import {
   View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert,
   Platform, Image,
@@ -225,7 +226,7 @@ export default function MediaAdmin() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable testID="admin-back" onPress={() => router.push("/(app)/media")} style={styles.back}>
-          <Text style={styles.backTxt}>‹</Text>
+          <ChevronLeft size={26} color={mediaTheme.text} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>ADMIN · MÉDIAS</Text>
