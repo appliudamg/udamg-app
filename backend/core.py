@@ -29,6 +29,7 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@udamg.app").strip().lower()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "AdminUdamg2026!")
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("udamg")
 
 password_hash = PasswordHash.recommended()
@@ -56,6 +57,48 @@ def now_iso() -> str:
 
 def new_id() -> str:
     return str(uuid4())
+
+
+_RATE: dict = {}
+
+
+def rate_limit(key: str, limit: int, window_sec: int) -> None:
+    """Limitation de débit simple en mémoire (par instance). Lève 429 au-delà de `limit` appels / fenêtre."""
+    import time
+    now = time.time()
+    hits = [t for t in _RATE.get(key, []) if now - t < window_sec]
+    if len(hits) >= limit:
+        raise HTTPException(429, "Trop de tentatives — réessayez dans quelques instants")
+    hits.append(now)
+    _RATE[key] = hits
+    _gc(now, window_sec)
+
+
+def check_failures(key: str, limit: int, window_sec: int) -> None:
+    """Verrouillage après `limit` échecs dans la fenêtre (ne compte pas les succès)."""
+    import time
+    now = time.time()
+    hits = [t for t in _RATE.get(key, []) if now - t < window_sec]
+    _RATE[key] = hits
+    if len(hits) >= limit:
+        raise HTTPException(429, "Trop de tentatives échouées — réessayez dans quelques minutes")
+
+
+def record_failure(key: str, window_sec: int) -> None:
+    import time
+    now = time.time()
+    _RATE[key] = [t for t in _RATE.get(key, []) if now - t < window_sec] + [now]
+    _gc(now, window_sec)
+
+
+def reset_failures(key: str) -> None:
+    _RATE.pop(key, None)
+
+
+def _gc(now: float, window_sec: int) -> None:
+    if len(_RATE) > 5000:
+        for k in [k for k, v in _RATE.items() if not v or now - v[-1] > window_sec]:
+            _RATE.pop(k, None)
 
 
 # --------------------------------------------------------------------------- #

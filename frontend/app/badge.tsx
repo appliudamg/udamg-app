@@ -13,11 +13,11 @@ export default function Badge() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { event, b } = useLocalSearchParams<{ event: string; b: string }>();
+  const { event, b, t } = useLocalSearchParams<{ event: string; b: string; t?: string }>();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["badge", event, b],
-    queryFn: () => api<EventParticipant>(`/event/participants/by-badge/${b}?evenement_id=${event}`),
+    queryKey: ["badge", event, b, t],
+    queryFn: () => api<EventParticipant>(`/event/participants/by-badge/${b}?evenement_id=${event}&t=${encodeURIComponent(t || "")}`),
     enabled: !!event && !!b,
   });
 

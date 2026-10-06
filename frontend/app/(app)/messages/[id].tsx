@@ -59,7 +59,7 @@ export default function MessageDetail() {
     const i = url.indexOf("/badge?");
     if (i >= 0) { router.push(url.slice(i) as any); return; }
     if (url.startsWith("/")) { router.push(url as any); return; }
-    Linking.openURL(url).catch(() => {});
+    if (/^https:\/\/([a-z0-9-]+\.)*(udamg-app\.vercel\.app|linktr\.ee)\//i.test(url)) Linking.openURL(url).catch(() => {});
   };
   const actionLabel = (url: string) => {
     if (url.includes("/badge?")) return "Voir mon badge";

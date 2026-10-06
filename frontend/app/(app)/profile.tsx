@@ -93,8 +93,8 @@ export default function Profile() {
         <Text style={styles.section}>Changer mon mot de passe</Text>
         <View style={styles.box}>
           <PasswordInput testID="pwd-current" value={cur} onChangeText={setCur} placeholder="Mot de passe actuel" placeholderTextColor={colors.muted} inputStyle={styles.input} />
-          <PasswordInput testID="pwd-new" value={next} onChangeText={setNext} placeholder="Nouveau mot de passe (min. 6)" placeholderTextColor={colors.muted} inputStyle={styles.input} />
-          <Pressable testID="pwd-save" disabled={!cur || next.length < 6 || change.isPending} onPress={() => change.mutate()} style={({ pressed }) => [styles.cta, (!cur || next.length < 6 || pressed) && { opacity: 0.7 }]}>
+          <PasswordInput testID="pwd-new" value={next} onChangeText={setNext} placeholder="Nouveau mot de passe (10 car. min, lettre + chiffre)" placeholderTextColor={colors.muted} inputStyle={styles.input} />
+          <Pressable testID="pwd-save" disabled={!cur || next.length < 10 || change.isPending} onPress={() => change.mutate()} style={({ pressed }) => [styles.cta, (!cur || next.length < 10 || pressed) && { opacity: 0.7 }]}>
             {change.isPending ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.ctaTxt}>Mettre à jour</Text>}
           </Pressable>
         </View>

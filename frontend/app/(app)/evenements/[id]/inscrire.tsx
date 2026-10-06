@@ -127,7 +127,7 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
             </View>
           </View>
 
-          <Pressable testID="insc-see-badge" onPress={() => router.push(`/badge?event=${id}&b=${done.badge_id}`)} style={[styles.cta, { marginTop: spacing.lg }]}>
+          <Pressable testID="insc-see-badge" onPress={() => router.push(`/badge?event=${id}&b=${done.badge_id}&t=${done.badge_token || ""}`)} style={[styles.cta, { marginTop: spacing.lg }]}>
             <QrCode size={18} color={colors.onBrandPrimary} />
             <Text style={styles.ctaTxt}>{mode === "self" ? "Voir mon badge" : "Voir le badge"}</Text>
           </Pressable>
@@ -153,7 +153,7 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: insets.bottom + spacing.xxl }} keyboardShouldPersistTaps="handled">
         {mode === "edit" && existing && (
-          <Pressable testID="edit-see-badge" onPress={() => router.push(`/badge?event=${id}&b=${existing.badge_id}`)} style={styles.badgeCard}>
+          <Pressable testID="edit-see-badge" onPress={() => router.push(`/badge?event=${id}&b=${existing.badge_id}&t=${existing.badge_token || ""}`)} style={styles.badgeCard}>
             <QrCode size={28} color={colors.brandPrimary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.badgeLbl}>MON BADGE</Text>

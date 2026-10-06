@@ -9,6 +9,7 @@ export type EventParticipant = {
   id: string;
   evenement_id: string;
   badge_id: string;
+  badge_token?: string;
   nom: string;
   prenom: string;
   profil: EventProfil;

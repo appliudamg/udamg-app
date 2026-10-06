@@ -41,10 +41,11 @@ if (Platform.OS === "android") {
 }
 
 function openFromNotification(router: ReturnType<typeof useRouter>, data: Record<string, any>) {
-  const url = data?.deeplink || data?.action_url;
+  const url = String(data?.deeplink || data?.action_url || "");
   if (!url) return;
-  if (String(url).startsWith("http")) Linking.openURL(String(url));
-  else router.push(String(url) as any);
+  if (url.startsWith("/")) { router.push(url as any); return; }
+  // Sécurité : uniquement https vers nos domaines (jamais javascript:, http:, domaines inconnus)
+  if (/^https:\/\/([a-z0-9-]+\.)*(udamg-app\.vercel\.app|linktr\.ee)\//i.test(url)) Linking.openURL(url).catch(() => {});
 }
 
 export default function RootLayout() {

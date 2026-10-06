@@ -100,7 +100,7 @@ export default function UsersAdmin() {
   const openEdit = (u: User) => { setF({ email: u.email, nom: u.nom, prenom: u.prenom, role: u.role, password: "" }); setOpen({ mode: "edit", user: u }); };
   const confirmDelete = (u: User) => confirmAction("Supprimer ce compte ?", `${u.prenom} ${u.nom} (${u.email})`, () => remove.mutate(u));
 
-  const valid = f.nom.trim() && f.prenom.trim() && (open?.mode === "edit" || (f.email.includes("@") && f.password.length >= 6));
+  const valid = f.nom.trim() && f.prenom.trim() && (open?.mode === "edit" || (f.email.includes("@") && f.password.length >= 10));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -170,7 +170,7 @@ export default function UsersAdmin() {
             <TextInput testID="user-form-nom" value={f.nom} onChangeText={(t) => setF({ ...f, nom: t })} style={styles.input} placeholder="Nom" placeholderTextColor={colors.muted} />
             <Text style={styles.label}>Email</Text>
             <TextInput testID="user-form-email" value={f.email} editable={open?.mode === "create"} onChangeText={(t) => setF({ ...f, email: t })} style={[styles.input, open?.mode === "edit" && { opacity: 0.6 }]} autoCapitalize="none" keyboardType="email-address" placeholder="email@exemple.com" placeholderTextColor={colors.muted} />
-            <Text style={styles.label}>{open?.mode === "create" ? "Mot de passe (min. 6 caractères)" : "Nouveau mot de passe (optionnel)"}</Text>
+            <Text style={styles.label}>{open?.mode === "create" ? "Mot de passe (10 caractères min, lettre + chiffre)" : "Nouveau mot de passe (optionnel)"}</Text>
             <Text style={styles.help}>La personne recevra automatiquement un email avec le lien de l&apos;application, son identifiant et ce mot de passe.</Text>
             <PasswordInput testID="user-form-password" value={f.password} onChangeText={(t) => setF({ ...f, password: t })} inputStyle={styles.input} placeholder="••••••••" placeholderTextColor={colors.muted} />
 

@@ -203,7 +203,7 @@ class TestUserDuplicates:
         r = requests.post(f"{API}/admin/users", headers=H(tokens["admin"]), json={
             "email": "comev.test@example.com",
             "nom": "NouveauNom", "prenom": "AutrePrenom",
-            "role": "membre", "password": "Abcdef12!",
+            "role": "membre", "password": "Abcdef1234!",
         }, timeout=30)
         assert r.status_code == 409
         assert "email" in r.text.lower() or "doublon" in r.text.lower()
@@ -212,7 +212,7 @@ class TestUserDuplicates:
         r = requests.post(f"{API}/admin/users", headers=H(tokens["admin"]), json={
             "email": "test19_newuser_different@example.com",
             "nom": "COMEV", "prenom": "test",   # matches existing 'Comev' 'Test' (accents/case insensitive)
-            "role": "membre", "password": "Abcdef12!",
+            "role": "membre", "password": "Abcdef1234!",
         }, timeout=30)
         assert r.status_code == 409
 
@@ -220,7 +220,7 @@ class TestUserDuplicates:
         r = requests.post(f"{API}/admin/users", headers=H(tokens["admin"]), json={
             "email": "test19_comev2@example.com",
             "nom": "TEST19", "prenom": "ComevTwo",
-            "role": "comev", "password": "Abcdef12!",
+            "role": "comev", "password": "Abcdef1234!",
         }, timeout=30)
         assert r.status_code == 201, f"got {r.status_code}: {r.text}"
         uid = r.json()["id"]

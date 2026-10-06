@@ -3,10 +3,10 @@ import os
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from core import logger
+from core import current_user, logger
 
 PUSH_BASE_URL = "https://integrations.emergentagent.com"
 PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
@@ -19,15 +19,19 @@ def _client() -> httpx.Client:
 
 
 class RegisterPushBody(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None  # ignoré : l'identité vient du jeton
     platform: str  # "android" | "ios"
     device_token: str
 
 
 @router.post("/register-push", status_code=201)
-def register_push(body: RegisterPushBody):
+def register_push(body: RegisterPushBody, user=Depends(current_user)):
+    """Enregistre le téléphone de l'utilisateur CONNECTÉ uniquement (jamais un user_id arbitraire)."""
+    if body.platform not in ("android", "ios") or not body.device_token.strip():
+        raise HTTPException(400, "platform / device_token invalides")
+    payload = {"user_id": user["id"], "platform": body.platform, "device_token": body.device_token.strip()}
     with _client() as c:
-        resp = c.post("/api/v1/push/users/register", json=body.model_dump())
+        resp = c.post("/api/v1/push/users/register", json=payload)
     if resp.status_code == 401:
         raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
     if resp.status_code >= 500:

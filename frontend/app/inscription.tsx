@@ -58,7 +58,7 @@ function Inner() {
           {!!done.eglise && <Text style={styles.doneMeta}>Église : {done.eglise}</Text>}
           <Pressable
             testID="insc-see-badge"
-            onPress={() => router.push(`/badge?event=${event}&b=${done.badge_id}`)}
+            onPress={() => router.push(`/badge?event=${event}&b=${done.badge_id}&t=${done.badge_token || ""}`)}
             style={[styles.cta, { marginTop: spacing.xl }]}
           >
             <Text style={styles.ctaTxt}>Voir mon badge</Text>

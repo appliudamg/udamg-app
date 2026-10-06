@@ -217,7 +217,7 @@ export default function Inscrits() {
                 <Text style={styles.dotLbl}>WhatsApp</Text>
                 <Pressable
                   testID={`participant-badge-${item.id}`}
-                  onPress={() => router.push(`/badge?event=${id}&b=${item.badge_id}`)}
+                  onPress={() => router.push(`/badge?event=${id}&b=${item.badge_id}&t=${item.badge_token || ""}`)}
                   style={styles.miniBtn}
                 >
                   <Text style={styles.miniBtnTxt}>Voir badge →</Text>

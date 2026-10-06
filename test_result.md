@@ -156,3 +156,9 @@ backend:
 frontend:
   - task: "Thème, Découvrir, form événement, mini-player X, menu Je donne, COMEV bloc users" ; implemented: true
 credentials: voir /app/memory/test_credentials.md (COMEV : comev.test@example.com / ComevTest2026!)
+
+## Itération 20 — Correctifs audit sécurité (Juin 2026)
+backend:
+  - task: "SEC-001..005 + durcissements (voir PRD iter 20)" ; implemented: true ; tests: backend/tests/test_iter20_security.py 6/6
+frontend:
+  - task: "badge?t=, push Bearer, politique mdp 10, deeplinks filtrés" ; implemented: true

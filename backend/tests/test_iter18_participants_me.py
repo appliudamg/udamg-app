@@ -192,7 +192,7 @@ class TestPatchDeleteMe:
         # _next_badge_id = max(existing)+1; after DELETE, same number may be re-issued (no conflict).
         # Verify no actual uniqueness collision via a GET by badge.
         gr = requests.get(f"{API}/event/participants/by-badge/{d['badge_id']}",
-                          params={"evenement_id": event_id}, headers=H(tokens["membre"]), timeout=30)
+                          params={"evenement_id": event_id, "t": d["badge_token"]}, headers=H(tokens["membre"]), timeout=30)
         assert gr.status_code == 200 and gr.json()["id"] == d["id"], "badge must map to this participant only"
         pytest.pid2 = d["id"]
         pytest.badge_id2 = d["badge_id"]

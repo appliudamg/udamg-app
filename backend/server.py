@@ -1,15 +1,17 @@
 """UDAMG APP — API (Supabase). Auth, gestion des utilisateurs, Messagerie, Media, Événements."""
+import os
+import re
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from core import (
     ADMIN_EMAIL, ADMIN_PASSWORD, DUMMY_HASH, ROLE_ADMIN, ROLE_MEMBRE, ROLE_PASTEUR, ROLE_TECH, ROLES,
     USER_ADMIN_ROLES, PublicUser, TokenResponse, create_token, current_user, logger, new_id, now_iso,
-    password_hash, public_user, require_role, sb,
+    check_failures, password_hash, public_user, record_failure, reset_failures, require_role, sb,
 )
 import events
 from events import strip_accents
@@ -20,6 +22,20 @@ import stories
 import pensees
 from mailer import send_credentials_email
 
+def client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return (fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?"))
+
+
+def check_password_strength(v: Optional[str]) -> Optional[str]:
+    """Politique : 10 caractères minimum, au moins une lettre et un chiffre."""
+    if v is None:
+        return v
+    if len(v) < 10 or not re.search(r"[A-Za-zÀ-ÿ]", v) or not re.search(r"\d", v):
+        raise ValueError("Mot de passe trop faible : 10 caractères minimum avec au moins une lettre et un chiffre")
+    return v
+
+
 RoleLiteral = Literal["admin", "equipe_technique", "pasteur", "missionnaire", "berger",
                       "leader", "ouvrier", "disciple", "membre", "comev"]
 
@@ -29,7 +45,7 @@ RoleLiteral = Literal["admin", "equipe_technique", "pasteur", "missionnaire", "b
 # --------------------------------------------------------------------------- #
 class Credentials(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class UserCreate(BaseModel):
@@ -37,7 +53,12 @@ class UserCreate(BaseModel):
     nom: str = Field(min_length=1, max_length=80)
     prenom: str = Field(min_length=1, max_length=80)
     role: RoleLiteral
-    password: Optional[str] = Field(default=None, min_length=6, max_length=128)
+    password: Optional[str] = Field(default=None, min_length=10, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def _strong(cls, v):
+        return check_password_strength(v)
 
 
 class UserUpdate(BaseModel):
@@ -46,7 +67,12 @@ class UserUpdate(BaseModel):
     role: Optional[RoleLiteral] = None
     is_approved: Optional[bool] = None
     disabled: Optional[bool] = None
-    password: Optional[str] = Field(default=None, min_length=6, max_length=128)
+    password: Optional[str] = Field(default=None, min_length=10, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def _strong(cls, v):
+        return check_password_strength(v)
 
 
 class UserSaved(PublicUser):
@@ -56,7 +82,12 @@ class UserSaved(PublicUser):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=6, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strong(cls, v):
+        return check_password_strength(v)
 
 
 # --------------------------------------------------------------------------- #
@@ -95,7 +126,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="UDAMG API", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "https://udamg-app.vercel.app,http://localhost:3000,http://localhost:8081").split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_origin_regex=r"https://.*\.(emergentagent\.com|emergent\.host|vercel\.app)$", allow_credentials=False,
                    allow_methods=["*"], allow_headers=["*"])
 api = APIRouter(prefix="/api")
 
@@ -114,13 +146,20 @@ def list_roles():
 
 
 @api.post("/auth/login", response_model=TokenResponse)
-def login(data: Credentials):
+def login(data: Credentials, request: Request):
     email = data.email.strip().lower()
+    # Anti brute-force : seuls les ÉCHECS comptent — 5 échecs / 5 min par compte, 60 / 5 min par IP
+    # (wifi partagé, proxy Vercel) ; un succès remet le compteur du compte à zéro.
+    check_failures(f"login:{email}", 5, 300)
+    check_failures(f"login-ip:{client_ip(request)}", 60, 300)
     res = sb().table("users").select("*").eq("email", email).limit(1).execute()
     u = res.data[0] if res.data else None
     ok = password_hash.verify(data.password, u["password_hash"] if u else DUMMY_HASH)
     if not u or not ok or u.get("disabled"):
+        record_failure(f"login:{email}", 300)
+        record_failure(f"login-ip:{client_ip(request)}", 300)
         raise HTTPException(401, "Email ou mot de passe incorrect")
+    reset_failures(f"login:{email}")
     if not u.get("is_approved", True):
         raise HTTPException(403, detail={"code": "email_not_approved", "email": email,
                                          "message": "Votre compte n'a pas encore été approuvé par un administrateur."})

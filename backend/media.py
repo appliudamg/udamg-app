@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api")
 
 MEDIA_BUCKET = "media"
 COVER_BUCKET = "covers"
-SIGNED_URL_TTL = 6 * 3600
+SIGNED_URL_TTL = 3600  # 1 h (réduit après audit)
 
 TAXONOMY = [
     {"key": "culte_dimanche", "label": "Culte du dimanche", "subcategories": []},

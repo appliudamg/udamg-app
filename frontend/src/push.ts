@@ -8,7 +8,7 @@ import { API_BASE } from "./api";
  * Appelé à chaque ouverture de session : les jetons peuvent changer.
  * Ne bloque jamais le parcours utilisateur en cas de refus.
  */
-export async function registerForPush(userId: string): Promise<void> {
+export async function registerForPush(token: string): Promise<void> {
   if (Platform.OS === "web" || !Device.isDevice) return;
   try {
     const current = await Notifications.getPermissionsAsync();
@@ -20,8 +20,8 @@ export async function registerForPush(userId: string): Promise<void> {
     const tokenResp = await Notifications.getDevicePushTokenAsync();
     await fetch(`${API_BASE}/api/register-push`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, platform: Platform.OS, device_token: String(tokenResp.data) }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ platform: Platform.OS, device_token: String(tokenResp.data) }),
     });
   } catch (e) {
     console.warn("Push registration failed", e);

@@ -198,3 +198,13 @@ La lecture en arrière-plan / verrouillage écran est activée (audio mode) mais
 - **Événements** : écran `app/(app)/evenements/form.tsx` (création + modification `?id=`) avec import d'affiche (`POST /api/evenements/image-upload-url` → bucket public `covers/events/`) ; bouton « Modifier l'événement » (admin/tech/pasteur/comev). Modal de création supprimée de la liste.
 - **Retour** : `ChevronLeft` lucide visible (cercle bordé bleu) sur toutes les pages.
 - Tests : `backend/tests/test_iter19_duplicates_comev.py` 20/20 ; frontend validé (iteration_19).
+
+## Itération 20 (juin 2026) — Audit sécurité (Red Team) & correctifs
+Audit `security_audit_agent` : 2 Élevées, 3 Moyennes, 7 durcissements → tous corrigés (`backend/tests/test_iter20_security.py` 6/6).
+- SEC-001 : `/event/participants/by-badge/{id}` exige un jeton HMAC `t` (`events.badge_token`, dérivé de `JWT_SECRET`) et ne renvoie plus email/tel/notes ; `badge_token` ajouté aux réponses participants ; liens badge (email, Messagerie, écrans) incluent `&t=`. Le scanner utilise `_find_by_badge` (interne).
+- SEC-002 : `/users`, `/event/participants` (liste + détail), `/event/dashboard`, `/event/pointages`, `/event/sessions`, `/event/enfants` (GET), exports CSV/PDF → `EVENT_MANAGE_ROLES` uniquement.
+- SEC-003 : `/api/register-push` authentifié, `user_id` forcé depuis le jeton (`src/push.ts` envoie le Bearer).
+- SEC-004 : « Inscrire une autre personne » limité à 10 / heure / utilisateur (compté en base) + log.
+- SEC-005 : export CSV neutralise `= + - @ \t \r`.
+- Durcissements : CORS restreint (`ALLOWED_ORIGINS` env + regex vercel/emergent), anti brute-force login (5 échecs / 5 min par compte, 60 / IP, `core.check_failures`), inscription publique 10 / 10 min / IP, mot de passe ≥ 10 car. + lettre + chiffre (`check_password_strength`, création/modif/changement ; les anciens restent valides), URLs signées média TTL 1 h, logs httpx en WARNING, deeplinks/action_url : seules les routes internes et https vers udamg-app.vercel.app / linktr.ee sont ouverts.
+- Risques acceptés : PIN 0123 côté client (cosmétique, données protégées côté serveur) ; `?token=` conservé pour le streaming web (nécessaire aux balises audio/vidéo) ; `google-services.json` versionné (identifiants client Firebase non secrets) ; rate limiting en mémoire par instance (Vercel serverless).

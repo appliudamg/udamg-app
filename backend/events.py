@@ -1,12 +1,14 @@
 """Espace Événements — événements, inscrits/badges, séances, pointage QR, enfants, dashboard, exports."""
+import hashlib
+import hmac
 import io
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from reportlab.lib import colors as rl_colors
@@ -16,8 +18,8 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import (
-    EDITORIAL_ROLES, EVENT_ADMIN_ROLES, EVENT_MANAGE_ROLES, PublicUser, current_user, display_name, logger,
-    new_id, now_iso, public_user, require_role, sb,
+    JWT_SECRET, EDITORIAL_ROLES, EVENT_ADMIN_ROLES, EVENT_MANAGE_ROLES, PublicUser, current_user, display_name, logger,
+    new_id, now_iso, public_user, rate_limit, require_role, sb,
 )
 from mailer import APP_URL, send_badge_email
 from messaging import broadcast_system_message, send_private_message
@@ -164,9 +166,16 @@ def _evt(d: dict) -> Evenement:
     )
 
 
+def badge_token(evenement_id: str, badge_id: str) -> str:
+    """Jeton anti-énumération pour la page publique du badge (HMAC du couple événement/badge)."""
+    return hmac.new(JWT_SECRET.encode(), f"{evenement_id}:{badge_id}".encode(), hashlib.sha256).hexdigest()[:24]
+
+
 def _participant(d: dict) -> dict:
     d = dict(d)
     d["jours_presence"] = d.get("jours_presence") or []
+    if d.get("evenement_id") and d.get("badge_id"):
+        d["badge_token"] = badge_token(d["evenement_id"], d["badge_id"])
     return d
 
 
@@ -209,7 +218,7 @@ def list_villes(_=Depends(current_user)):
 
 
 @router.get("/users", response_model=List[PublicUser])
-def list_users(_=Depends(current_user)):
+def list_users(_=Depends(manage_dep)):
     rows = sb().table("users").select("*").eq("disabled", False).order("nom").execute().data
     return [public_user(u) for u in rows]
 
@@ -319,7 +328,7 @@ def invite(data: InvitationCreate, _=Depends(manage_dep)):
 # --------------------------------------------------------------------------- #
 @router.get("/event/participants")
 def list_participants(evenement_id: str, profil: Optional[str] = None, eglise: Optional[str] = None,
-                      q: Optional[str] = None, _=Depends(current_user)):
+                      q: Optional[str] = None, _=Depends(manage_dep)):
     qry = sb().table("event_participants").select("*").eq("evenement_id", evenement_id).order("nom")
     if profil:
         qry = qry.eq("profil", profil)
@@ -359,8 +368,11 @@ class PublicParticipantIn(ParticipantIn):
 
 
 @router.post("/event/participants/public", status_code=201)
-def public_inscription(data: PublicParticipantIn):
-    """Formulaire d'inscription partageable (sans authentification)."""
+def public_inscription(data: PublicParticipantIn, request: Request):
+    """Formulaire d'inscription partageable (sans authentification) — 10 inscriptions / 10 min / IP."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?")
+    rate_limit(f"public-insc:{ip}", 10, 600)
     return _insert_participant(data, data.referent, None)
 
 
@@ -402,7 +414,7 @@ class MyRegistrationUpdate(BaseModel):
 
 
 def _badge_url(evenement_id: str, badge_id: str) -> str:
-    return f"{APP_URL}/badge?event={evenement_id}&b={badge_id}"
+    return f"{APP_URL}/badge?event={evenement_id}&b={badge_id}&t={badge_token(evenement_id, badge_id)}"
 
 
 def _qr_png(content: str) -> bytes:
@@ -529,6 +541,11 @@ def register_other(data: OtherRegistrationIn, user=Depends(current_user)):
     if not data.nom.strip() or not data.prenom.strip():
         raise HTTPException(400, "Nom et prénom requis")
     evt = _get_event_or_404(data.evenement_id)
+    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    recent = sb().table("event_participants").select("id", count="exact").eq("registered_by", user["id"]).is_("user_id", "null").gte("created_at", since).execute().count or 0
+    if recent >= 10:
+        raise HTTPException(429, "Limite atteinte : 10 inscriptions pour d'autres personnes par heure. Réessayez plus tard.")
+    logger.info("Inscription tierce par %s pour %s", user["email"], email)
     _check_duplicate_participant(evt["id"], data.nom, data.prenom, email, data.tel)
     row = {
         "id": new_id(), "evenement_id": evt["id"], "badge_id": _next_badge_id(evt["id"]),
@@ -542,12 +559,20 @@ def register_other(data: OtherRegistrationIn, user=Depends(current_user)):
     return {**p, "delivery": _deliver_badge(p, evt, to_user_id=None, registered_by=display_name(user))}
 
 
-@router.get("/event/participants/by-badge/{badge_id}")
-def get_by_badge(badge_id: str, evenement_id: str):
+def _find_by_badge(badge_id: str, evenement_id: str) -> dict:
     res = sb().table("event_participants").select("*").eq("badge_id", badge_id).eq("evenement_id", evenement_id).limit(1).execute()
     if not res.data:
         raise HTTPException(404, "Badge introuvable")
     return _participant(res.data[0])
+
+
+@router.get("/event/participants/by-badge/{badge_id}")
+def get_by_badge(badge_id: str, evenement_id: str, t: str = ""):
+    """Page publique du badge : jeton HMAC obligatoire, aucune donnée de contact renvoyée."""
+    if not hmac.compare_digest(t or "", badge_token(evenement_id, badge_id)):
+        raise HTTPException(404, "Badge introuvable")
+    p = _find_by_badge(badge_id, evenement_id)
+    return {k: p.get(k) for k in ("id", "evenement_id", "badge_id", "nom", "prenom", "profil", "eglise", "categorie_age", "badge_token")}
 
 
 @router.post("/event/participants/purge")
@@ -561,7 +586,7 @@ def purge_participants(data: PurgeInput, _=Depends(admin_dep)):
 
 
 @router.get("/event/participants/{pid}")
-def get_participant(pid: str, _=Depends(current_user)):
+def get_participant(pid: str, _=Depends(manage_dep)):
     res = sb().table("event_participants").select("*").eq("id", pid).limit(1).execute()
     if not res.data:
         raise HTTPException(404, "Participant introuvable")
@@ -591,7 +616,7 @@ def delete_participant(pid: str, _=Depends(manage_dep)):
 # Séances
 # --------------------------------------------------------------------------- #
 @router.get("/event/sessions")
-def list_sessions(evenement_id: str, _=Depends(current_user)):
+def list_sessions(evenement_id: str, _=Depends(manage_dep)):
     return sb().table("event_sessions").select("*").eq("evenement_id", evenement_id).order("started_at", desc=True).execute().data
 
 
@@ -631,7 +656,7 @@ def create_pointage(data: PointageIn, user=Depends(manage_dep)):
     active = _active_session(data.evenement_id)
     if not active:
         raise HTTPException(423, "Aucune séance active — un responsable doit démarrer une séance")
-    p = get_by_badge(data.badge_id, data.evenement_id)
+    p = _find_by_badge(data.badge_id, data.evenement_id)
     existing = sb().table("event_pointages").select("id").eq("participant_id", p["id"]).eq("session_id", active["id"]).limit(1).execute().data
     if existing:
         return {"status": "already", "participant": p, "session_nom": active["nom"]}
@@ -642,7 +667,7 @@ def create_pointage(data: PointageIn, user=Depends(manage_dep)):
 
 
 @router.get("/event/pointages")
-def list_pointages(evenement_id: str, session_id: Optional[str] = None, limit: int = 50, _=Depends(current_user)):
+def list_pointages(evenement_id: str, session_id: Optional[str] = None, limit: int = 50, _=Depends(manage_dep)):
     qry = sb().table("event_pointages").select("*, participant:event_participants(*)") \
         .eq("evenement_id", evenement_id).order("timestamp", desc=True).limit(limit)
     if session_id:
@@ -667,7 +692,7 @@ def add_enfants(data: EnfantsIn, user=Depends(manage_dep)):
 
 
 @router.get("/event/enfants")
-def get_enfants(evenement_id: str, session_id: Optional[str] = None, _=Depends(current_user)):
+def get_enfants(evenement_id: str, session_id: Optional[str] = None, _=Depends(manage_dep)):
     if not session_id:
         active = _active_session(evenement_id)
         if not active:
@@ -681,7 +706,7 @@ def get_enfants(evenement_id: str, session_id: Optional[str] = None, _=Depends(c
 # Dashboard
 # --------------------------------------------------------------------------- #
 @router.get("/event/dashboard")
-def dashboard(evenement_id: str, _=Depends(current_user)):
+def dashboard(evenement_id: str, _=Depends(manage_dep)):
     parts = sb().table("event_participants").select("*").eq("evenement_id", evenement_id).execute().data
     active = _active_session(evenement_id)
 
@@ -732,7 +757,7 @@ def dashboard(evenement_id: str, _=Depends(current_user)):
 # Exports
 # --------------------------------------------------------------------------- #
 @router.get("/event/exports/participants.csv")
-def export_participants_csv(evenement_id: str, _=Depends(current_user)):
+def export_participants_csv(evenement_id: str, _=Depends(manage_dep)):
     docs = sb().table("event_participants").select("*").eq("evenement_id", evenement_id).order("nom").execute().data
     lines = ["badge_id,nom,prenom,profil,eglise,tel,email,referent,jours_presence,sms_status,wa_status,created_at"]
     for d in docs:
@@ -740,9 +765,17 @@ def export_participants_csv(evenement_id: str, _=Depends(current_user)):
                d.get("eglise") or "", d.get("tel") or "", d.get("email") or "", d.get("referent") or "",
                "|".join(d.get("jours_presence") or []), d.get("sms_status", "none"), d.get("wa_status", "none"),
                d.get("created_at", "")]
-        lines.append(",".join('"' + str(c).replace('"', '""') + '"' for c in row))
+        lines.append(",".join('"' + _csv_safe(c) + '"' for c in row))
     return StreamingResponse(io.BytesIO("\n".join(lines).encode("utf-8")), media_type="text/csv",
                              headers={"Content-Disposition": 'attachment; filename="participants.csv"'})
+
+
+def _csv_safe(value) -> str:
+    """Neutralise l'injection de formules (= + - @ tab CR) à l'ouverture dans un tableur."""
+    s = str(value if value is not None else "")
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        s = "'" + s
+    return s.replace('"', '""')
 
 
 def _table(rows, col_widths=None) -> Table:
@@ -757,7 +790,7 @@ def _table(rows, col_widths=None) -> Table:
 
 
 @router.get("/event/exports/bilan.pdf")
-def export_bilan_pdf(evenement_id: str, _=Depends(current_user)):
+def export_bilan_pdf(evenement_id: str, _=Depends(manage_dep)):
     evt = _get_event_or_404(evenement_id)
     parts = sb().table("event_participants").select("profil").eq("evenement_id", evenement_id).execute().data
     sessions = sb().table("event_sessions").select("*").eq("evenement_id", evenement_id).order("started_at").execute().data

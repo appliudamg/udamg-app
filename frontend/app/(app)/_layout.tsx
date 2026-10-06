@@ -11,7 +11,7 @@ import { useTheme, makeStyles } from "@/src/theme";
 export default function AppLayout() {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { user, loading } = useAuth();
+  const { user, loading, token } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -20,8 +20,8 @@ export default function AppLayout() {
 
   // Enregistre le téléphone pour les notifications push à chaque session
   useEffect(() => {
-    if (user) registerForPush(user.id);
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (user && token) registerForPush(token);
+  }, [user?.id, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !user) {
     return (
