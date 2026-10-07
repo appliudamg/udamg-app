@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator,
+  View, Text, Pressable, ScrollView, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, MediaItem, Playlist } from "@/src/api";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
@@ -17,6 +17,8 @@ import { ChevronLeft, ListMusic } from "lucide-react-native";
 type Tab = "playlists" | "favorites";
 
 export default function Library() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
@@ -175,7 +177,7 @@ export default function Library() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 },
   back: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card },
@@ -218,4 +220,4 @@ const styles = StyleSheet.create({
   btnGreyTxt: { color: mediaTheme.textMuted, fontWeight: "700" },
   btnGold: { backgroundColor: mediaTheme.gold },
   btnGoldTxt: { color: "#000", fontWeight: "800" },
-});
+}));

@@ -1,12 +1,14 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, Image, Platform } from "react-native";
+import { View, Text, Pressable, Image, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/src/player";
-import { mediaTheme, initialsOf, categoryHue } from "@/src/media_theme";
+import { initialsOf, categoryHue, useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { mediaCoverUrl } from "@/src/api";
 import { Pause, Play, X } from "lucide-react-native";
 
 export function MiniPlayer() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const insets = useSafeAreaInsets();
   const { current, isPlaying, positionSec, durationSec, toggle, openPlayer, stop } = usePlayer();
 
@@ -59,7 +61,7 @@ export function MiniPlayer() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   wrap: {
     position: "absolute",
     left: 12, right: 12,
@@ -92,4 +94,4 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card, borderWidth: 1, borderColor: mediaTheme.border },
-});
+}));

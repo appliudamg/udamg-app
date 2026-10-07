@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, RefreshControl,
+  View, Text, Pressable, ScrollView, ActivityIndicator, RefreshControl,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, MediaItem } from "@/src/api";
-import { mediaTheme, categoryHue } from "@/src/media_theme";
+import { categoryHue, useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { usePlayer } from "@/src/player";
 import { BottomNav } from "@/src/media/BottomNav";
@@ -16,6 +16,8 @@ import { ChevronLeft, Settings } from "lucide-react-native";
 import { StoriesStrip } from "@/src/media/StoriesStrip";
 
 export default function MediaHome() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
@@ -170,6 +172,7 @@ export default function MediaHome() {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.sec}>
       <Text style={styles.secTitle}>{title}</Text>
@@ -179,6 +182,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function ShortcutBtn({ label, hue, onPress, testID }: { label: string; hue: string; onPress: () => void; testID?: string }) {
+  const styles = useStyles();
   return (
     <Pressable testID={testID} onPress={onPress} style={[styles.shortBtn, { backgroundColor: hue + "22", borderColor: hue }]}>
       <Text style={[styles.shortTxt, { color: hue }]}>{label}</Text>
@@ -186,7 +190,7 @@ function ShortcutBtn({ label, hue, onPress, testID }: { label: string; hue: stri
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 },
   back: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card },
@@ -212,4 +216,4 @@ const styles = StyleSheet.create({
   emptyBox: { padding: 32, alignItems: "center" },
   emptyTitle: { color: mediaTheme.text, fontSize: 18, fontWeight: "800", marginBottom: 8 },
   emptyTxt: { color: mediaTheme.textMuted, textAlign: "center", lineHeight: 20 },
-});
+}));

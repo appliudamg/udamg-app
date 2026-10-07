@@ -1,9 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/player";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { Heart, Music, Search, type LucideIcon } from "lucide-react-native";
 
 type Tab = "home" | "discover" | "library";
@@ -15,6 +15,8 @@ const TABS: { key: Tab; label: string; Icon: LucideIcon; path: string }[] = [
 ];
 
 export function BottomNav({ active }: { active: Tab }) {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { current } = usePlayer();
@@ -51,7 +53,7 @@ export function BottomNav({ active }: { active: Tab }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   wrap: {
     position: "absolute", left: 0, right: 0,
     paddingHorizontal: 12, paddingTop: 6,
@@ -72,4 +74,4 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: "center", gap: 2, paddingVertical: 4 },
   icon: { color: mediaTheme.textMuted, fontSize: 20, lineHeight: 22 },
   label: { color: mediaTheme.textMuted, fontSize: 11 },
-});
+}));

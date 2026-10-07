@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ChevronLeft } from "lucide-react-native";
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert,
+  View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert,
   Platform, Image,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -13,11 +13,13 @@ import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "@/src/auth";
 import { api, MediaItem, MediaCategoriesResponse } from "@/src/api";
 import { canWriteMedia } from "@/src/roles";
-import { mediaTheme, categoryHue, initialsOf } from "@/src/media_theme";
+import { categoryHue, initialsOf, useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 
 type FormPick = { uri: string; name: string; mimeType?: string | null; size?: number | null; file?: File | null };
 
 export default function MediaAdmin() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
@@ -358,6 +360,7 @@ export default function MediaAdmin() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={{ gap: 6 }}>
       <Text style={styles.label}>{label}</Text>
@@ -374,7 +377,7 @@ function toast(msg: string) {
   Alert.alert("", msg);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   center: { alignItems: "center", justifyContent: "center", padding: 40 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 },
@@ -413,4 +416,4 @@ const styles = StyleSheet.create({
   rowSub: { color: mediaTheme.textMuted, fontSize: 12, marginTop: 2 },
   delBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: mediaTheme.rubySoft, alignItems: "center", justifyContent: "center" },
   delTxt: { color: mediaTheme.ruby, fontWeight: "900", fontSize: 22, marginTop: -2 },
-});
+}));

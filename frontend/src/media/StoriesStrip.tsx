@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, Pressable, Image, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Play } from "lucide-react-native";
@@ -6,10 +6,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { api, Story } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { canWriteMedia } from "@/src/roles";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 
 /** Bandeau Stories (contenus éphémères 24 h) affiché en tête de l'accueil Media. */
 export function StoriesStrip() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const router = useRouter();
   const { user, token } = useAuth();
   const canPublish = canWriteMedia(user?.role);
@@ -66,7 +68,7 @@ export function StoriesStrip() {
 }
 
 const SIZE = 72;
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   wrap: { paddingTop: 8 },
   head: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 },
   title: { color: mediaTheme.text, fontSize: 18, fontWeight: "800" },
@@ -80,4 +82,4 @@ const styles = StyleSheet.create({
   thumb: { flex: 1, borderRadius: SIZE / 2, backgroundColor: mediaTheme.card },
   videoThumb: { alignItems: "center", justifyContent: "center" },
   label: { color: mediaTheme.textMuted, fontSize: 11, maxWidth: SIZE + 8 },
-});
+}));

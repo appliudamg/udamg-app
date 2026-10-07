@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator,
+  View, Text, Pressable, ScrollView, TextInput, ActivityIndicator,
   FlatList,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, MediaItem, MediaCategoriesResponse } from "@/src/api";
-import { mediaTheme, categoryHue } from "@/src/media_theme";
+import { categoryHue, useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
@@ -30,6 +30,8 @@ const SECTIONS: { key: Section; label: string }[] = [
 const LOUANGE_KEY = "louange";
 
 export default function Discover() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
@@ -97,8 +99,8 @@ export default function Discover() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
-        style={{ maxHeight: 48 }}
+        contentContainerStyle={{ paddingHorizontal: 20, gap: 8, alignItems: "center" }}
+        style={{ flexGrow: 0 }}
       >
         {SECTIONS.map((sec) => (
           <Pressable
@@ -107,7 +109,7 @@ export default function Discover() {
             onPress={() => pickSection(sec.key)}
             style={[styles.chip, styles.sectionChip, section === sec.key && styles.sectionChipOn]}
           >
-            <Text style={[styles.chipTxt, styles.sectionTxt, section === sec.key && styles.chipTxtOn]}>{sec.label}</Text>
+            <Text numberOfLines={1} style={[styles.chipTxt, styles.sectionTxt, section === sec.key && styles.chipTxtOn]}>{sec.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -198,7 +200,7 @@ export default function Discover() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 },
   back: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card },
@@ -212,7 +214,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: mediaTheme.border, fontSize: 15,
   },
   chip: { paddingHorizontal: 14, height: 34, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card, borderWidth: 1, borderColor: mediaTheme.border },
-  sectionChip: { paddingVertical: 10, paddingHorizontal: 16 },
+  sectionChip: { height: 40, paddingHorizontal: 16 },
   sectionChipOn: { backgroundColor: mediaTheme.gold, borderColor: mediaTheme.gold },
   sectionTxt: { fontSize: 13, fontWeight: "800" },
   chipOn: { backgroundColor: mediaTheme.gold, borderColor: mediaTheme.gold },
@@ -220,4 +222,4 @@ const styles = StyleSheet.create({
   chipTxtOn: { color: "#000" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: mediaTheme.textMuted, textAlign: "center", marginTop: 40 },
-});
+}));

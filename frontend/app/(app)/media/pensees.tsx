@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, FlatList, TextInput, Image, ActivityIndicator, Modal, ScrollView, Platform, KeyboardAvoidingView } from "react-native";
+import { View, Text, Pressable, FlatList, TextInput, Image, ActivityIndicator, Modal, ScrollView, Platform, KeyboardAvoidingView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,13 +11,15 @@ import { useAuth } from "@/src/auth";
 import { canEditPensees } from "@/src/roles";
 import { useToast } from "@/src/toast";
 import { confirmAction } from "@/src/confirm";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 
 type Pick = { uri: string; name: string; mimeType: string; file?: File };
 
 const fmtDate = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 export default function Pensees() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -140,7 +142,7 @@ export default function Pensees() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingBottom: 8 },
   iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
@@ -168,4 +170,4 @@ const styles = StyleSheet.create({
   pickTxt: { color: mediaTheme.text, fontWeight: "600" },
   cta: { backgroundColor: mediaTheme.gold, borderRadius: 14, minHeight: 54, alignItems: "center", justifyContent: "center", marginTop: 10 },
   ctaTxt: { color: "#000", fontWeight: "800", fontSize: 16 },
-});
+}));

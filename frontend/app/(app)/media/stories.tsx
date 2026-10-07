@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Image, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, Pressable, Image, ActivityIndicator, Dimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,11 +10,12 @@ import { api, Story } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { canWriteMedia } from "@/src/roles";
 import { confirmAction } from "@/src/confirm";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 
 const IMAGE_MS = 6000;
 
 function StoryVideo({ url, onEnd, paused }: { url: string; onEnd: () => void; paused: boolean }) {
+  const styles = useStyles();
   const player = useVideoPlayer({ uri: url }, (p) => { p.loop = false; });
   const { status } = useEvent(player, "statusChange", { status: player.status });
   useEffect(() => {
@@ -30,6 +31,8 @@ function StoryVideo({ url, onEnd, paused }: { url: string; onEnd: () => void; pa
 }
 
 export default function StoriesViewer() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const { start } = useLocalSearchParams<{ start?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -149,7 +152,7 @@ export default function StoriesViewer() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: "#000" },
   media: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
   tapZones: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" },
@@ -165,4 +168,4 @@ const styles = StyleSheet.create({
   caption: { color: "#FFF", fontSize: 16, fontWeight: "600", textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 6 },
   viewsRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   views: { color: mediaTheme.textMuted, fontSize: 12 },
-});
+}));

@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer, SleepTimerMode } from "@/src/player";
-import { mediaTheme, initialsOf, categoryHue, kindLabel } from "@/src/media_theme";
+import { initialsOf, categoryHue, kindLabel, useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { mediaCoverUrl, mediaFileUrl, fmtDuration } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,6 +16,8 @@ import { openDonation } from "@/src/links";
 const RATES = [0.75, 1, 1.25, 1.5, 2];
 
 export function PlayerModal() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const insets = useSafeAreaInsets();
   const p = usePlayer();
   const { token } = useAuth();
@@ -172,6 +174,9 @@ function VideoScreen({
   isFav: boolean;
   onFav: () => void;
 }) {
+  const videoStyles = useVideoStyles();
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const insets = useSafeAreaInsets();
   const player = useVideoPlayer(url, (p) => {
     p.staysActiveInBackground = true;
@@ -213,7 +218,7 @@ function VideoScreen({
   );
 }
 
-const videoStyles = StyleSheet.create({
+const useVideoStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: "#000" },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10 },
   iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
@@ -225,10 +230,11 @@ const videoStyles = StyleSheet.create({
   metaTitle: { color: "#FFF", fontSize: 20, fontWeight: "800" },
   metaAuthor: { color: mediaTheme.gold, fontSize: 13 },
   metaDesc: { color: mediaTheme.textMuted, fontSize: 13, lineHeight: 20, marginTop: 8 },
-});
+}));
 
 // ---- Progress bar (tap to seek) ---- //
 function ProgressBar({ pct, onScrub }: { pct: number; onScrub: (f: number) => void }) {
+  const pbStyles = usePbStyles();
   const [width, setWidth] = useState(1);
   const pan = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -249,7 +255,7 @@ function ProgressBar({ pct, onScrub }: { pct: number; onScrub: (f: number) => vo
     </View>
   );
 }
-const pbStyles = StyleSheet.create({
+const usePbStyles = makeMediaStyles((mediaTheme) => ({
   track: { height: 20, justifyContent: "center", marginTop: 8 },
   fill: { position: "absolute", left: 0, top: 9, height: 3, backgroundColor: mediaTheme.gold, borderRadius: 2 },
   knob: {
@@ -257,9 +263,10 @@ const pbStyles = StyleSheet.create({
     backgroundColor: mediaTheme.gold, marginLeft: -6,
     ...Platform.select({ ios: { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }, android: { elevation: 3 } }),
   },
-});
+}));
 
 function RateBtn({ value, onCycle }: { value: number; onCycle: () => void }) {
+  const styles = useStyles();
   return (
     <Pressable onPress={onCycle} style={styles.extraBtn} testID="player-rate">
       <Text style={styles.extraTxt}>{value}×</Text>
@@ -275,6 +282,7 @@ function SleepPicker({
   current: SleepTimerMode;
   onPick: (m: SleepTimerMode) => void;
 }) {
+  const sleepStyles = useSleepStyles();
   const opts: { label: string; mode: SleepTimerMode }[] = [
     { label: "Arrêter", mode: null },
     { label: "15 minutes", mode: 15 * 60 },
@@ -302,7 +310,7 @@ function SleepPicker({
   );
 }
 
-const sleepStyles = StyleSheet.create({
+const useSleepStyles = makeMediaStyles((mediaTheme) => ({
   bg: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: mediaTheme.bgTop, borderTopLeftRadius: 20, borderTopRightRadius: 20,
@@ -312,9 +320,9 @@ const sleepStyles = StyleSheet.create({
   row: { paddingVertical: 14, borderRadius: 12, paddingHorizontal: 16 },
   rowActive: { backgroundColor: mediaTheme.goldSoft },
   rowTxt: { color: mediaTheme.text, fontSize: 15, fontWeight: "600" },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 8 },
   chevron: { color: mediaTheme.text, fontSize: 32, marginTop: -8 },
@@ -365,4 +373,4 @@ const styles = StyleSheet.create({
   donBtn: { backgroundColor: mediaTheme.gold, borderColor: mediaTheme.gold },
   noAudio: { marginTop: 12, padding: 10, backgroundColor: mediaTheme.rubySoft, borderRadius: 10 },
   noAudioTxt: { color: "#FFC5CE", fontSize: 12, textAlign: "center", lineHeight: 17 },
-});
+}));

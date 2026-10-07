@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Image, ActivityIndicator, ScrollView, Platform, Alert } from "react-native";
+import { View, Text, Pressable, TextInput, Image, ActivityIndicator, ScrollView, Platform, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,12 +10,14 @@ import { api, Story } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { canWriteMedia } from "@/src/roles";
 import { useToast } from "@/src/toast";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 
 type Pick = { uri: string; name: string; mimeType: string; kind: "image" | "video"; file?: File };
 const DURATIONS = [24, 48, 72];
 
 export default function StoryNew() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -138,7 +140,7 @@ export default function StoryNew() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingBottom: 8 },
   back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
@@ -158,4 +160,4 @@ const styles = StyleSheet.create({
   chipTxt: { color: mediaTheme.textMuted, fontWeight: "700", fontSize: 13 },
   cta: { backgroundColor: mediaTheme.gold, borderRadius: 14, minHeight: 54, alignItems: "center", justifyContent: "center", marginTop: 8 },
   ctaTxt: { color: "#000", fontWeight: "800", fontSize: 16 },
-});
+}));

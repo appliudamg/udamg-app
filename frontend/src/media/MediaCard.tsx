@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, Image } from "react-native";
 import { MediaItem, mediaCoverUrl, fmtDuration } from "@/src/api";
-import { mediaTheme, categoryHue, initialsOf, kindLabel } from "@/src/media_theme";
+import { categoryHue, initialsOf, kindLabel, useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 
 export function MediaCard({
   item,
@@ -14,6 +14,8 @@ export function MediaCard({
   layout?: "row" | "tile" | "hero";
   right?: React.ReactNode;
 }) {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const cover = mediaCoverUrl(item);
   const hue = categoryHue[item.category] || mediaTheme.violetDeep;
 
@@ -71,7 +73,7 @@ export function MediaCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   tile: { width: 148, gap: 6 },
   tileCover: { width: 148, height: 148, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   img: { width: "100%", height: "100%" },
@@ -97,4 +99,4 @@ const styles = StyleSheet.create({
   rowMeta: { flex: 1, minWidth: 0 },
   rowTitle: { color: mediaTheme.text, fontSize: 14, fontWeight: "700" },
   rowAuthor: { color: mediaTheme.textMuted, fontSize: 12, marginTop: 2 },
-});
+}));

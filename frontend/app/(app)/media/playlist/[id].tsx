@@ -1,19 +1,21 @@
 import React, { useMemo } from "react";
 import { ChevronLeft } from "lucide-react-native";
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Platform, Alert,
+  View, Text, Pressable, ScrollView, ActivityIndicator, Platform, Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/src/auth";
 import { api, MediaItem, Playlist } from "@/src/api";
-import { mediaTheme } from "@/src/media_theme";
+import { useMediaTheme, makeMediaStyles } from "@/src/media_theme";
 import { MediaCard } from "@/src/media/MediaCard";
 import { BottomNav } from "@/src/media/BottomNav";
 import { usePlayer } from "@/src/player";
 
 export default function PlaylistDetail() {
+  const styles = useStyles();
+  const mediaTheme = useMediaTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -148,7 +150,7 @@ export default function PlaylistDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeMediaStyles((mediaTheme) => ({
   root: { flex: 1, backgroundColor: mediaTheme.bg },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 },
   back: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: mediaTheme.card },
@@ -164,4 +166,4 @@ const styles = StyleSheet.create({
   removeTxt: { color: mediaTheme.ruby, fontWeight: "900", fontSize: 20 },
   addBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: mediaTheme.goldSoft, alignItems: "center", justifyContent: "center" },
   addTxt: { color: mediaTheme.gold, fontWeight: "900", fontSize: 20 },
-});
+}));
