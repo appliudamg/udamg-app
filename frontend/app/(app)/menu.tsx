@@ -16,7 +16,7 @@ const MEDIA_IMG = "https://images.unsplash.com/photo-1478147427282-58a87a120781?
 
 export default function MenuPrincipal() {
   const styles = useStyles();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, token } = useAuth();
@@ -34,8 +34,8 @@ export default function MenuPrincipal() {
       <View style={styles.header}>
         <View>
           <Text style={styles.hello}>Bonjour {user?.prenom}</Text>
-          <View style={styles.logoWrap}>
-            <Image source={require("../../assets/images/logo_udamg.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="UDAMG" testID="menu-logo" />
+          <View style={[styles.logoWrap, scheme === "dark" && { backgroundColor: "#000000" }]}>
+            <Image source={scheme === "dark" ? require("../../assets/images/logo_udamg_dark.png") : require("../../assets/images/logo_udamg.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="UDAMG" testID="menu-logo" />
           </View>
           {!!user && <Text style={styles.role}>{roleLabel(user.role)}</Text>}
         </View>

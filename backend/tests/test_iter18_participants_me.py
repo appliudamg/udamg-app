@@ -20,7 +20,7 @@ API = f"{BASE_URL}/api"
 CREDS = {
     "admin":    ("admin@udamg.app",     "AdminUdamg2026!"),
     "pasteur":  ("pasteur@udamg.app",   "PasteurUdamg2026!"),
-    "membre":   ("membre@udamg.app",    "MembreUdamg2026!"),
+    "membre":   ("test.membre@udamg.app", "MembreTest2026!"),
     "technique":("technique@udamg.app", "TechUdamg2026!"),
 }
 
@@ -99,7 +99,7 @@ class TestParticipantMe:
         assert r.status_code == 201, f"got {r.status_code}: {r.text}"
         d = r.json()
         assert d.get("user_id") == membre_id
-        assert (d.get("email") or "").lower() == "membre@udamg.app"
+        assert (d.get("email") or "").lower() == "test.membre@udamg.app"
         assert d.get("profil") == "Membre"
         assert d.get("eglise") == "CCMG Nantes"
         assert re.match(r"^EBED-\d{4}$", d.get("badge_id") or ""), f"bad badge_id {d.get('badge_id')}"

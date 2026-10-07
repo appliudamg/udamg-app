@@ -1,0 +1,45 @@
+{
+  "summary": "Iter21 UDAMG — Validation (A) backend register_me rattache l'inscription publique orpheline (même email) → linked:true + MÊME badge_id ; (B) UI event-copy-link gating via canShareEventLink (EVENT_MANAGE_ROLES) ; (C) UI insc-error (encadré rouge) + toast sur /other duplicate ; (D) logo dark du menu avec conteneur noir. BACKEND : 10/10 tests PASSED (/app/backend/tests/test_iter21_linked_duplicates.py, 10.55s) — POST /public TESTEUR Membre test.membre@udamg.app → 201 EBED-#### ; POST /me → 201 linked:true + MÊME badge_id + MÊME participant id ; GET /me renvoie l'inscription rattachée ; DELETE /me → 204 ; re-POST /me fresh → 201 sans linked ; cleanup OK. /other avec AGOSSA/Kewen → 409 'Doublon détecté' ; /other Nouveau21/Invite21 → 201. FRONTEND (mobile 390x844, Expo web preview) : (1) test.membre@udamg.app : event-copy-link ABSENT ✅ ; event-register PRESENT → inscrire → 'Confirmer mon inscription' → inscription confirmée → bannière event-registered-banner visible après retour ✅ ; event-cancel-registration → confirm dialog → event-register réapparaît ✅ ; event-register-other avec AGOSSA/Kewen/autre21.x@gmail.com → encadré rouge insc-error visible avec texte EXACT 'Doublon détecté : Kewen AGOSSA est déjà inscrit(e) (badge EBED-0001) — même nom et prénom. Inscription refusée.' ✅ (screenshot /tmp/dup_error.png) ; correction Nouveau21FE/Invite21FE/invite21fe.test@gmail.com → 'Inscription confirmée' ✅. (2) admin@udamg.app : event-copy-link PRESENT ✅. (3) pasteur@udamg.app : event-copy-link PRESENT ✅. (4) Thème sombre (via pasteur Profile → theme-dark) → /menu : menu-logo présent, wrapper backgroundColor = rgb(0,0,0) BLACK confirmé ✅ (screenshot /tmp/menu_dark.png) ; logout → /login en dark : login-brand présent avec logo_udamg_dark.png MAIS LE WRAPPER N'EST PAS NOIR → voir issue UI bug ci-dessous. (5) Nettoyage effectué : thème remis en LIGHT par admin ; participant Nouveau21FE supprimé via admin DELETE (status 204) ; test.membre non inscrit ; pas d'écran rouge RN ; pas d'erreur JS bloquante (seul le 409 attendu loggé en console).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "login.tsx — logo wrapper en thème sombre",
+        "issue": "La page de connexion en thème sombre affiche la variante dark du logo (logo_udamg_dark.png) mais SANS conteneur noir autour, contrairement à /menu qui wrappe menu-logo dans une View avec backgroundColor:'#000000'. Résultat visuel sur /login dark : le logo apparaît sur son fond blanc natif au milieu d'une page sombre → contraste gênant. Référence : /app/frontend/app/login.tsx:91-93 (<View style={styles.header}> → <Image testID='login-brand' .../>) à comparer avec /app/frontend/app/(app)/menu.tsx:37 ([styles.logoWrap, scheme === 'dark' && { backgroundColor: '#000000' }]). CORRECTIF SUGGÉRÉ : ajouter la même expression conditionnelle sur le wrapper styles.header (ou envelopper l'Image dans une View dédiée avec le style conditionnel 'dark → bg #000').",
+        "testID": "login-brand",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "login (dark)", "issues": ["Logo UDAMG sur fond blanc visible contre page sombre — ajouter conteneur noir pour cohérence avec le menu."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter21_linked_duplicates.py",
+    "/app/test_reports/pytest/pytest_iter21.xml",
+    "/app/test_reports/iteration_21.json"
+  ],
+  "action_items": [
+    "Ajouter dans /app/frontend/app/login.tsx un wrapper (View) autour de <Image testID='login-brand' .../> avec style conditionnel {scheme === 'dark' ? { backgroundColor: '#000000' } : null} (plus padding/borderRadius comme styles.logoWrap de menu.tsx) pour que la variante sombre du logo s'affiche sur conteneur noir — demande utilisateur explicite : « le logo UDAMG du menu ET de la page de connexion utilise une variante à fond NOIR, conteneur noir »."
+  ],
+  "critical_code_review_comments": [
+    "backend/events.py:488-518 register_me — nouvelle branche orphan correctement implémentée : SELECT eq(evenement_id).is_(user_id,null).ilike(email, email).limit(1) ; en cas de hit : UPDATE user_id/profil/categorie_age/tel/eglise sur l'inscription existante (badge_id et id préservés) ; _deliver_badge appelé ; renvoie {...participant, delivery, linked:true} avec status 201. ✅",
+    "backend/events.py:505-508 — fallback _check_duplicate_participant conservé APRÈS la branche orphan : si on arrive ici c'est qu'il n'y a pas d'orphelin au même email → l'exception 409 est renvoyée avec message explicite incluant l'email du compte connecté. ✅",
+    "frontend/src/roles.ts:10,23 — EVENT_MANAGE_ROLES=['admin','equipe_technique','pasteur','comev'] ; canShareEventLink = has(EVENT_MANAGE_ROLES, r) → bloque bien membre/disciple/ouvrier/leader/berger/missionnaire. ✅",
+    "frontend/app/(app)/evenements/[id].tsx:170-172 — rendu conditionnel {canShareEventLink(user?.role) && (<Pressable testID='event-copy-link' .../>)} correctement gated. ✅",
+    "frontend/app/(app)/evenements/[id]/inscrire.tsx:209-212 — bloc <View style={styles.errorBox} testID='insc-error'><Text>{err}</Text></View> rendu quand err non-null + Toast en parallèle, texte identique à la détail du 409 backend. ✅",
+    "frontend/app/(app)/menu.tsx:37 — [styles.logoWrap, scheme === 'dark' && { backgroundColor: '#000000' }] : wrapper noir en dark confirmé visuellement (rgb(0,0,0)). ✅",
+    "frontend/app/login.tsx:92 — scheme-aware logo source OK mais wrapper noir MANQUANT en dark → bug UI (voir ui_bugs ci-dessus)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter21_linked_duplicates.py (nouveau fichier)"
+  ],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "6/7 flux validés — login-brand dark wrapper non noir (bug mineur UI)"},
+  "seed_data_creation": "Données créées puis NETTOYÉES : inscription publique orpheline TESTEUR/Membre (test.membre@udamg.app) sur événement MJAC → rattachée puis supprimée ; participant Invite21FE NOUVEAU21FE (invite21fe.test@gmail.com) → supprimé via admin DELETE (status 204) ; test.membre non inscrit à la fin. Participants réels (AGOSSA Kewen) NON touchés. Thème final = LIGHT (localStorage udamg.theme=light pour admin).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "testIDs iter21 : login-email-input / login-password-input / login-submit-button / login-brand / profile-logout / theme-light|dark|system / menu-logo / evt-open-<id> / event-copy-link / event-register / event-cancel-registration / event-register-other / event-registered-banner / inscrire-back / insc-prenom / insc-nom / insc-email / insc-tel / insc-eglise / insc-submit / insc-error / insc-done-title / insc-done-badge / insc-back-event. Profile route = /(app)/profile (singulier anglais). Les boutons de confirmation (annuler inscription, logout) utilisent window.confirm sur web → playwright doit faire `page.once('dialog', lambda d: d.accept())` AVANT le click. Localstorage auth : clé = 'udamg_auth_token' (valeur = token brut, pas JSON) ; theme = 'udamg.theme'. Backend register_me renvoie {linked:true, ...} 201 si orphelin trouvé → NE PAS traiter comme un conflit. L'événement MJAC a 2 participants réels AGOSSA Kewen (EBED-0001) à préserver. Tous les tests playbook de ce run (incluant 2 endpoints 409 attendus) ont été exécutés successivement sur un même preview ; pas de blocage.",
+  "rca_of_issue": "Bug reporté par l'utilisateur : « je n'arrive plus à m'inscrire ni à inscrire une autre personne ». RCA = sa fiche publique (inscription via lien partageable sans compte, même email) occupait déjà une ligne event_participants avec user_id=null ; la détection de doublon _check_duplicate_participant renvoyait 409 'même adresse email' quand il appelait POST /me. CORRECTIF E1 (events.py register_me) : AVANT le check de doublon, SELECT ... is_(user_id,null).ilike(email,…) → si trouvé, UPDATE pour rattacher au compte (badge inchangé) et renvoyer linked:true. Les autres doublons (nom+prénom, email d'un autre compte, téléphone) continuent à renvoyer 409 avec message explicite affiché dans insc-error. VALIDATION : 10 tests pytest + 1 flux UI complet reproduisant le cas exact (orphan → /me linked:true → delete → fresh /me OK) → correctif OPÉRATIONNEL. Un petit bug UI résiduel : logo dark de la page login sans wrapper noir (voir action_items)."
+}

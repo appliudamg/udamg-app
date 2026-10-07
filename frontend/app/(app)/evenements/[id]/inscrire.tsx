@@ -6,7 +6,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, CheckCircle2, Mail, MessageSquare, QrCode } from "lucide-react-native";
+import { AlertTriangle, ChevronLeft, CheckCircle2, Mail, MessageSquare, QrCode } from "lucide-react-native";
 import { useAuth } from "@/src/auth";
 import { useToast } from "@/src/toast";
 import { api } from "@/src/api";
@@ -61,6 +61,7 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
     email: existing?.email ?? (mode === "self" ? user?.email || "" : ""), eglise: existing?.eglise ?? "",
   });
   const [done, setDone] = useState<Result | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["my-registration", id] });
@@ -76,8 +77,8 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
       }
       return api<Result>("/event/participants/me", { method: "POST", body: JSON.stringify({ ...common, email: f.email.trim() || null }) }, token);
     },
-    onSuccess: (p) => { invalidate(); setDone(p); },
-    onError: (e: any) => toast.show(e?.message || "Inscription impossible", "error"),
+    onSuccess: (p) => { invalidate(); setDone(p); setError(null); },
+    onError: (e: any) => { const m = e?.message || "Inscription impossible"; setError(m); toast.show(m, "error"); },
   });
 
   const update = useMutation({
@@ -85,8 +86,8 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
       method: "PATCH",
       body: JSON.stringify({ profil, categorie_age: age, tel: f.tel || null, email: f.email.trim() || null, eglise: f.eglise || null }),
     }, token),
-    onSuccess: () => { invalidate(); toast.show("Inscription mise à jour", "success"); },
-    onError: (e: any) => toast.show(e?.message || "Mise à jour impossible", "error"),
+    onSuccess: () => { invalidate(); setError(null); toast.show("Inscription mise à jour", "success"); },
+    onError: (e: any) => { const m = e?.message || "Mise à jour impossible"; setError(m); toast.show(m, "error"); },
   });
 
   const submit = () => {
@@ -107,7 +108,7 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <ScrollView contentContainerStyle={[styles.doneWrap, { paddingBottom: insets.bottom + spacing.xl }]}>
           <CheckCircle2 size={64} color={colors.success} />
-          <Text style={styles.doneTitle} testID="insc-done-title">Inscription confirmée</Text>
+          <Text style={styles.doneTitle} testID="insc-done-title">{(done as any).linked ? "Inscription rattachée à votre compte" : "Inscription confirmée"}</Text>
           <Text style={styles.doneName}>{done.prenom} {done.nom}</Text>
           <Text style={styles.doneBadge} testID="insc-done-badge">{done.badge_id}</Text>
           <Text style={styles.doneMeta}>Profil : {done.profil}</Text>
@@ -204,6 +205,12 @@ function RegistrationForm({ id, mode, titre, existing }: { id: string; mode: Mod
         )}
         <TextInput testID="insc-eglise" placeholder="Église (ex : CCMG Paris)" placeholderTextColor={colors.muted} value={f.eglise} onChangeText={t => setF({ ...f, eglise: t })} style={styles.input} />
 
+        {!!error && (
+          <View style={styles.errorBox} testID="insc-error">
+            <AlertTriangle size={18} color={colors.error} />
+            <Text style={styles.errorTxt}>{error}</Text>
+          </View>
+        )}
         <Pressable testID="insc-submit" onPress={submit} disabled={pending || (mode === "edit" && !existing)} style={[styles.cta, (pending || (mode === "edit" && !existing)) && { opacity: 0.5 }]}>
           {pending ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
             <Text style={styles.ctaTxt}>{mode === "edit" ? "Enregistrer les modifications" : mode === "other" ? "Inscrire et envoyer le badge" : "Confirmer mon inscription"}</Text>
@@ -232,6 +239,8 @@ const useStyles = makeStyles((colors) => ({
   chip: { flexBasis: "47%", flexGrow: 1, padding: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceSecondary, alignItems: "center", minHeight: 48, justifyContent: "center" },
   chipTxt: { color: colors.onSurface, fontWeight: "700", fontSize: 13, textAlign: "center" },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.surfaceSecondary, color: colors.onSurface, fontSize: 15, minHeight: 52, marginTop: spacing.sm },
+  errorBox: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start", backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.error, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg },
+  errorTxt: { color: colors.error, fontWeight: "600", fontSize: 13, flex: 1, lineHeight: 18 },
   cta: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.brandPrimary, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", minHeight: 54, justifyContent: "center", marginTop: spacing.xl },
   ctaTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 16 },
   linkBtn: { padding: spacing.lg, alignItems: "center" },

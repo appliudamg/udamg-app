@@ -19,7 +19,8 @@ export const canSendMessages = (r?: Role | null) => has(MESSAGE_SEND_ROLES, r);
 export const canManageUsers = (r?: Role | null) => has(USER_ADMIN_ROLES, r);
 export const canManageEvents = (r?: Role | null) => has(EVENT_MANAGE_ROLES, r);
 export const canAdminEvents = (r?: Role | null) => has(EVENT_ADMIN_ROLES, r);
-export const canShareEventLink = (r?: Role | null) => !!r && r !== "membre";
+// Copier le lien d'inscription : COMEV, Pasteur, Équipe technique, Admin uniquement
+export const canShareEventLink = (r?: Role | null) => has(EVENT_MANAGE_ROLES, r);
 export const canSendRappel = (r?: Role | null) => has(EDITORIAL_ROLES, r);
 export const canEditPensees = (r?: Role | null) => has(EDITORIAL_ROLES, r);
 // « Mes droits d'accès » (Profil) : visible uniquement pour Admin et Équipe technique

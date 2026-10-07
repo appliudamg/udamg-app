@@ -3,7 +3,7 @@ import os
 import requests
 
 API = os.environ.get("API_URL", "http://localhost:8001/api")
-CREDS = {"admin": ("admin@udamg.app", "AdminUdamg2026!"), "membre": ("membre@udamg.app", "MembreUdamg2026!")}
+CREDS = {"admin": ("admin@udamg.app", "AdminUdamg2026!"), "membre": ("test.membre@udamg.app", "MembreTest2026!")}
 
 
 def login(role):

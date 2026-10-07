@@ -493,7 +493,19 @@ def register_me(data: SelfRegistrationIn, user=Depends(current_user)):
     if _my_participant(evt["id"], user["id"]):
         raise HTTPException(409, "Vous êtes déjà inscrit(e) à cet événement")
     email = (data.email or user.get("email") or "").strip().lower() or None
-    _check_duplicate_participant(evt["id"], user.get("nom") or "", user.get("prenom") or "", email, data.tel)
+    # Déjà inscrit(e) via le formulaire public (même email, sans compte) → on rattache l'inscription au compte
+    # au lieu de refuser un doublon, puis on (ré)envoie le badge.
+    if email:
+        orphan = sb().table("event_participants").select("*").eq("evenement_id", evt["id"]).is_("user_id", "null").ilike("email", email).limit(1).execute().data
+        if orphan:
+            updates = {"user_id": user["id"], "profil": data.profil, "categorie_age": data.categorie_age or orphan[0].get("categorie_age"),
+                       "tel": data.tel or orphan[0].get("tel"), "eglise": data.eglise or orphan[0].get("eglise")}
+            p = _participant(sb().table("event_participants").update(updates).eq("id", orphan[0]["id"]).execute().data[0])
+            return {**p, "delivery": _deliver_badge(p, evt, to_user_id=user["id"], registered_by=None), "linked": True}
+    try:
+        _check_duplicate_participant(evt["id"], user.get("nom") or "", user.get("prenom") or "", email, data.tel)
+    except HTTPException as exc:
+        raise HTTPException(409, f"{exc.detail} Si c'est bien vous, demandez à l'organisation de rattacher cette inscription à votre compte ({user.get('email')}).")
     row = {
         "id": new_id(), "evenement_id": evt["id"], "badge_id": _next_badge_id(evt["id"]),
         "nom": (user.get("nom") or "").strip().upper(), "prenom": (user.get("prenom") or "").strip(),

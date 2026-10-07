@@ -15,7 +15,7 @@ import { PasswordInput } from "@/src/PasswordInput";
 export default function Login() {
   const styles = useStyles();
   const deniedStyles = useDeniedStyles();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const { login, denied, clearDenied } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -89,7 +89,9 @@ export default function Login() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Image source={require("../assets/images/logo_udamg.png")} style={styles.brandLogo} resizeMode="contain" accessibilityLabel="UDAMG" testID="login-brand" />
+          <View style={[styles.brandWrap, scheme === "dark" && { backgroundColor: "#000000" }]}>
+            <Image source={(scheme === "dark" ? require("../assets/images/logo_udamg_dark.png") : require("../assets/images/logo_udamg.png"))} style={styles.brandLogo} resizeMode="contain" accessibilityLabel="UDAMG" testID="login-brand" />
+          </View>
           <Text style={styles.slogan}>Sauvé par Grâce pour Sauver</Text>
         </View>
 
@@ -151,7 +153,8 @@ const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { paddingHorizontal: spacing.xl, gap: spacing.md },
   header: { alignItems: "center", marginBottom: spacing.xxl, gap: spacing.xs },
-  brandLogo: { width: 220, height: 130, alignSelf: "center" },
+  brandWrap: { alignSelf: "center", borderRadius: radius.lg, backgroundColor: "#FFFFFF", paddingHorizontal: 8 },
+  brandLogo: { width: 220, height: 130 },
   slogan: { color: colors.muted, fontStyle: "italic" },
   title: { fontSize: 28, fontWeight: "700", color: colors.onSurface },
   subtitle: { fontSize: 14, color: colors.muted, marginBottom: spacing.lg },

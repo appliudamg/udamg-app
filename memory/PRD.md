@@ -209,3 +209,9 @@ Audit `security_audit_agent` : 2 Élevées, 3 Moyennes, 7 durcissements → tous
 - Durcissements : CORS restreint (`ALLOWED_ORIGINS` env + regex vercel/emergent), anti brute-force login (5 échecs / 5 min par compte, 60 / IP, `core.check_failures`), inscription publique 10 / 10 min / IP, mot de passe ≥ 10 car. + lettre + chiffre (`check_password_strength`, création/modif/changement ; les anciens restent valides), URLs signées média TTL 1 h, logs httpx en WARNING, deeplinks/action_url : seules les routes internes et https vers udamg-app.vercel.app / linktr.ee sont ouverts.
 - Risques acceptés : PIN 0123 côté client (cosmétique, données protégées côté serveur) ; `?token=` conservé pour le streaming web (nécessaire aux balises audio/vidéo) ; `google-services.json` versionné (identifiants client Firebase non secrets) ; rate limiting en mémoire par instance (Vercel serverless).
 - Correctif thème (iter 20b) : bloc Media suit désormais le thème (palette `mediaLight` / `mediaDark`, `useMediaTheme()` + `makeMediaStyles`, script `frontend/scripts/themify_media.py`) ; chips de section Découvrir : hauteur 40 fixe (texte plus coupé). Visionneuse stories reste noire volontairement.
+
+## Itération 21 (juin 2026)
+- Copier le lien d'inscription : réservé COMEV / Pasteur / Équipe technique / Admin (`canShareEventLink = EVENT_MANAGE_ROLES`).
+- Inscription : si une inscription publique (sans compte) existe avec le même email, « Je m'inscris » la **rattache au compte** (`linked: true`, même badge) au lieu d'un 409 ; les autres doublons restent refusés, message affiché dans un encadré rouge (`insc-error`) + toast.
+- Mode sombre : logo variante fond noir (`assets/images/logo_udamg_dark.png`, bleu nuit éclairci) dans un conteneur noir (menu + login).
+- Comptes : `membre@udamg.app` et `comev.test@example.com` supprimés par l'utilisateur ; compte de test `test.membre@udamg.app` créé (voir test_credentials.md).
